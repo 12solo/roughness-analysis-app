@@ -115,37 +115,8 @@ AXIS_STYLE = dict(
 if not df_master.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
-    with tabs[2]:
-        st.subheader("Batch Replicate Stack")
-        batch_to_check = st.selectbox("Select Batch:", sorted(df_master['Sample'].unique()))
-        batch_files = sorted(df_master[df_master['Sample'] == batch_to_check]['File'].tolist())
-        offset_rep = st.slider("Vertical Offset (µm)", 1, 100, 25)
-        
-        fig_rep = go.Figure()
-        tick_vals, tick_text = [], []
-        for i, f in enumerate(batch_files):
-            y_shift = i * offset_rep
-            clean_name = os.path.splitext(f)[0]
-            current_profile = prof_dict[f]
-            fig_rep.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
-            
-            fig_rep.add_annotation(
-                x=current_profile['Length_mm'].mean(), 
-                y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
-                yshift=15, 
-                text=f"<b>Rep {i+1} ({clean_name})</b>", 
-                showarrow=False, 
-                font=dict(family="Times New Roman", size=14, color="black"),
-                bgcolor="rgba(255,255,255,0.7)"
-            )
-            for t in [-5, 0, 5]:
-                tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
-        
-        fig_rep.update_layout(template="simple_white", height=850, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text, **AXIS_STYLE))
-        st.plotly_chart(fig_rep, use_container_width=True)
-
     with tabs[3]:
-        st.subheader("Representative Stack (Inline Legend Layout)")
+        st.subheader("Representative Stack (Precise Hovering Legends)")
         offset_global = st.slider("Group Offset (µm)", 1, 300, 80)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -161,6 +132,7 @@ if not df_master.empty:
             current_profile = prof_dict[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
             
+            # 1. Plot the profile
             fig_glob.add_trace(go.Scatter(
                 x=current_profile['Length_mm'], 
                 y=current_profile['Amplitude_um_Norm'] + y_shift, 
@@ -170,23 +142,26 @@ if not df_master.empty:
                 line=dict(width=2)
             ))
             
-            # UPDATED: Row-based Legend (Name and Ra in front of each other)
-            # Positioned at the left corner, pushed up by yshift
+            # 2. Calculate the peak for this specific line to set legend height
+            peak_y = (current_profile['Amplitude_um_Norm'] + y_shift).max()
+            
+            # 3. Horizontal row label: Name + Ra
             inline_label = f"<b>{name}: <i>R<sub>a</sub></i> = {mean_ra:.3f} ± {std_ra:.3f} µm</b>"
             
             fig_glob.add_annotation(
                 x=current_profile['Length_mm'].min(), 
-                y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
-                yshift=20, # Vertical distance above peak
+                y=peak_y, 
+                yshift=12, # Distance (in pixels) above the highest peak
                 text=inline_label, 
                 showarrow=False, 
                 align="left", 
                 xanchor="left", 
                 yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor=None # Transparent per previous request
+                bgcolor=None 
             )
             
+            # Axis Ticks
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
         
@@ -197,8 +172,20 @@ if not df_master.empty:
             yaxis_title="<b>Amplitude (µm)</b>", 
             xaxis=AXIS_STYLE, 
             yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE),
-            margin=dict(l=100, r=40, t=80, b=100) # Increased top margin for labels
+            margin=dict(l=100, r=40, t=80, b=100)
         )
         st.plotly_chart(fig_glob, use_container_width=True)
+
+    with tabs[4]:
+        # Export logic remains same...
+        wide_list = []
+        for fname, p_data in prof_dict.items():
+            meta = df_master[df_master['File'] == fname].iloc[0]
+            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
+            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
+            temp.columns = [f"{header}_L", f"{header}_Amp"]
+            wide_list.append(temp)
+        if wide_list:
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_export.csv")
 else:
     st.info("👋 Use the sidebar to upload your sample replicates.")
