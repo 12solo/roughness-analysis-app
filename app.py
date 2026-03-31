@@ -58,21 +58,17 @@ class RoughnessLoader:
                     df_p = pd.read_excel(file, sheet_name=data_sheet, usecols=[4, 5])
                     df_p.columns = ['Length_mm', 'Amplitude_um']
                     df_p = df_p.apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
-                    
                     if not df_p.empty:
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
                         df_p['Sample'] = meta_template['Sample']
-                        df_p['Condition'] = meta_template['Condition']
-                        df_p['Day'] = meta_template['Day']
                         profile_map[file.name] = df_p
 
             except Exception as e:
                 st.error(f"Error in {file.name}: {e}")
-                
         return pd.DataFrame(combined_summary), profile_map
 
 # ==========================================
-# 3. UI & SIDEBAR
+# 3. UI & SIDEBAR (Legend Customization)
 # ==========================================
 st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
 st.title("🔬 Scientific Roughness Analyzer")
@@ -90,14 +86,14 @@ with st.sidebar:
         new_sum, new_prof = loader.process_files(s_files, meta)
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
-        st.success(f"Added {len(s_files)} replicates for {s_name}")
+        st.success(f"Added {len(s_files)} replicates.")
 
     st.markdown("---")
     st.header("2. Legend Customization")
     if not st.session_state['master_df'].empty:
-        unique_samples = st.session_state['master_df']['Sample'].unique()
+        unique_samples = sorted(st.session_state['master_df']['Sample'].unique())
         for s in unique_samples:
-            st.session_state['legend_map'][s] = st.text_input(f"Rename '{s}' to:", s)
+            st.session_state['legend_map'][s] = st.text_input(f"Rename '{s}' for plots:", s)
 
     if st.button("Reset Entire Study", type="primary"):
         st.session_state['master_df'] = pd.DataFrame()
@@ -106,104 +102,78 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# 4. DASHBOARD
+# 4. DASHBOARD TABS
 # ==========================================
 df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📋 Dataset", "📈 Stats", "📉 Trends", "🌊 Individual Batch Profiles", "🎨 Master Stacked Plot", "💾 Export"])
+    tabs = st.tabs(["📋 Dataset", "📉 Inter-Sample Trends", "🌊 Individual Ra Profile", "🎨 Batch Replicate Stack", "🏛️ Global Mean Stack", "💾 Export"])
 
     with tabs[0]:
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
+        st.subheader("Inter-Sample Comparison")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
-        if params:
-            p_sel = st.selectbox("Select Parameter", params)
-            stats_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-            st.dataframe(stats_df.style.format(precision=4), use_container_width=True)
+        p_sel = st.selectbox("Select Parameter", params)
+        plot_df = df.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
+        plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
+        plot_df['CI95'] = 1.96 * (plot_df['std'] / np.sqrt(plot_df['count']))
+        
+        fig_trend = px.line(plot_df, x="Sample", y="mean", error_y="CI95", markers=True, template="simple_white")
+        fig_trend.update_layout(xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'))
+        st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[2]:
-        if 'p_sel' in locals():
-            plot_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-            # Map legend names
-            plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
-            fig_trend = px.line(plot_df, x="Sample", y="mean", markers=True, template="simple_white")
-            fig_trend.update_layout(showlegend=False)
-            st.plotly_chart(fig_trend, use_container_width=True)
+        st.subheader("Individual Normalized Profile View")
+        sel_f = st.selectbox("Select File:", list(profiles.keys()))
+        p_data = profiles[sel_f]
+        fig_p = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', template="simple_white")
+        fig_p.add_hline(y=0, line_dash="dash", line_color="red")
+        st.plotly_chart(fig_p, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Batch Replicate Inspection")
-        if profiles:
-            unique_batches = df['Sample'].unique()
-            selected_s = st.selectbox("Select Batch to View:", unique_batches)
-            batch_files = df[df['Sample'] == selected_s]['File'].tolist()
-            
-            offset_val = st.slider("Vertical Offset (µm)", 1, 50, 10, key="batch_offset")
-            fig_batch = go.Figure()
-            
-            for i, fname in enumerate(sorted(batch_files)):
-                if fname in profiles:
-                    p_data = profiles[fname]
-                    fig_batch.add_trace(go.Scatter(
-                        x=p_data['Length_mm'],
-                        y=p_data['Amplitude_um_Norm'] + (i * offset_val),
-                        mode='lines', name=f"Rep {i+1}", line=dict(width=1)
-                    ))
-            
-            fig_batch.update_layout(template="simple_white", showlegend=True, 
-                                    xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'),
-                                    yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'))
-            st.plotly_chart(fig_batch, use_container_width=True)
+        st.subheader("Batch Replicate Stack (Check Consistency)")
+        batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
+        batch_files = df[df['Sample'] == batch_to_check]['File'].tolist()
+        offset_rep = st.slider("Vertical Offset (µm)", 1, 50, 10, key="rep_off")
+        
+        fig_rep = go.Figure()
+        for i, f in enumerate(sorted(batch_files)):
+            if f in profiles:
+                fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], y=profiles[f]['Amplitude_um_Norm'] + (i * offset_rep), mode='lines', name=f"Rep {i+1}"))
+        fig_rep.update_layout(template="simple_white", xaxis=dict(mirror=True, showline=True, linecolor='black'), yaxis=dict(mirror=True, showline=True, linecolor='black'))
+        st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[4]:
-        st.subheader("Global Comparison (Mean Profiles)")
-        if profiles:
-            global_offset = st.slider("Vertical Offset (µm)", 1, 100, 25, key="global_offset")
-            fig_global = go.Figure()
-            
-            unique_samples = sorted(df['Sample'].unique())
-            for i, sample in enumerate(unique_samples):
-                sample_files = df[df['Sample'] == sample]['File'].tolist()
-                relevant_profs = [profiles[f] for f in sample_files if f in profiles]
-                
-                if relevant_profs:
-                    combined = pd.concat(relevant_profs)
-                    combined['L_grp'] = combined['Length_mm'].round(5)
-                    mean_prof = combined.groupby('L_grp')['Amplitude_um_Norm'].mean().reset_index()
-                    
-                    # Use the Custom Legend Name
-                    display_name = st.session_state['legend_map'].get(sample, sample)
-                    
-                    fig_global.add_trace(go.Scatter(
-                        x=mean_prof['L_grp'],
-                        y=mean_prof['Amplitude_um_Norm'] + (i * global_offset),
-                        mode='lines', name=display_name, line=dict(width=2.5)
-                    ))
-            
-            fig_global.update_layout(
-                template="simple_white", 
-                xaxis_title="<b>Travel Length (mm)</b>", 
-                yaxis_title="<b>Amplitude + Offset (µm)</b>", 
-                height=700,
-                font=dict(family="Arial", size=14, color="black"),
-                # AXIS BORDER & TICKS
-                xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', gridcolor='lightgrey'),
-                yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', gridcolor='lightgrey'),
-                legend=dict(bordercolor="black", borderwidth=1)
-            )
-            st.plotly_chart(fig_global, use_container_width=True)
+        st.subheader("Global Mean Profile Comparison (Stacked)")
+        offset_global = st.slider("Vertical Offset (µm)", 1, 100, 25, key="glob_off")
+        fig_glob = go.Figure()
+        
+        unique_samples = sorted(df['Sample'].unique())
+        for i, sample in enumerate(unique_samples):
+            sample_files = df[df['Sample'] == sample]['File'].tolist()
+            profs = [profiles[f] for f in sample_files if f in profiles]
+            if profs:
+                combined = pd.concat(profs)
+                combined['L_grp'] = combined['Length_mm'].round(5)
+                mean_prof = combined.groupby('L_grp')['Amplitude_um_Norm'].mean().reset_index()
+                name = st.session_state['legend_map'].get(sample, sample)
+                fig_glob.add_trace(go.Scatter(x=mean_prof['L_grp'], y=mean_prof['Amplitude_um_Norm'] + (i * offset_global), mode='lines', name=name, line=dict(width=2)))
+        
+        fig_glob.update_layout(template="simple_white", font=dict(family="Arial", size=14), xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'), yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'))
+        st.plotly_chart(fig_glob, use_container_width=True)
 
     with tabs[5]:
         wide_list = []
         for fname, p_data in profiles.items():
             meta = df[df['File'] == fname].iloc[0]
-            header = st.session_state['legend_map'].get(meta['Sample'], meta['Sample']) + "_" + fname
+            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
             temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_Length", f"{header}_Amplitude"]
+            temp.columns = [f"{header}_L", f"{header}_Amp"]
             wide_list.append(temp)
         if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "profiles.csv")
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
 else:
-    st.info("👋 Upload data for your sample batches to begin.")
+    st.info("👋 Upload your sample batches to begin.")
