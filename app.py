@@ -79,7 +79,7 @@ with st.sidebar:
 
     if submit and s_files:
         loader = RoughnessLoader()
-        meta = {"Sample": s_name}
+        meta = {"Sample": s_name, "Condition": "Standard", "Day": 0}
         new_sum, new_prof = loader.process_files(s_files, meta)
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
@@ -105,23 +105,24 @@ with st.sidebar:
 df_master = st.session_state['master_df']
 prof_dict = st.session_state['profile_dict']
 
-# Global Scientific Axis Styling
 AXIS_STYLE = dict(
     mirror=True, ticks='outside', showline=True, 
     linecolor='black', linewidth=2.5,
-    title_font=dict(family="Times New Roman", size=22, color="black"),
-    tickfont=dict(family="Times New Roman", size=18, color="black")
+    title_font=dict(family="Times New Roman", size=20, color="black"),
+    tickfont=dict(family="Times New Roman", size=16, color="black")
 )
 
 if not df_master.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
+    # TABS [0]: Dataset
     with tabs[0]:
         st.subheader("Summary Table")
         st.dataframe(df_master, use_container_width=True)
 
+    # TABS [1]: Trends
     with tabs[1]:
-        st.subheader("Inter-Sample Trends")
+        st.subheader("Inter-Sample Comparison")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df_master.columns]
         if params:
             p_sel = st.selectbox("Select Parameter", params)
@@ -131,36 +132,61 @@ if not df_master.empty:
             fig_trend = px.line(plot_df, x="Display_Name", y="mean", 
                                 error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), 
                                 markers=True, template="simple_white")
-            fig_trend.update_layout(xaxis_title="<b>Sample ID</b>", yaxis_title=f"<b>Mean {p_sel} (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
+            fig_trend.update_layout(
+                xaxis_title="<b>Sample ID</b>", 
+                yaxis_title=f"<b>Mean {p_sel} (µm)</b>", 
+                xaxis=AXIS_STYLE, 
+                yaxis=AXIS_STYLE
+            )
             st.plotly_chart(fig_trend, use_container_width=True)
 
+    # TABS [2]: Replicate Stack
     with tabs[2]:
-        st.subheader("Batch Replicate Stack")
-        batch_to_check = st.selectbox("Select Batch:", sorted(df_master['Sample'].unique()))
+        st.subheader("Batch Replicate Inspection")
+        batch_to_check = st.selectbox("Select Batch to Inspect:", sorted(df_master['Sample'].unique()))
         batch_files = sorted(df_master[df_master['Sample'] == batch_to_check]['File'].tolist())
-        offset_rep = st.slider("Vertical Offset (µm)", 1, 100, 25)
+        offset_rep = st.slider("Vertical Offset (µm)", 1, 100, 25, key="rep_slider")
         
         fig_rep = go.Figure()
-        tick_vals, tick_text = [], []
-        for i, f in enumerate(batch_files):
-            y_shift = i * offset_rep
-            clean_name = os.path.splitext(f)[0]
-            fig_rep.add_trace(go.Scatter(x=prof_dict[f]['Length_mm'], y=prof_dict[f]['Amplitude_um_Norm'] + y_shift, mode='lines', showlegend=False))
-            
-            fig_rep.add_annotation(
-                x=prof_dict[f]['Length_mm'].mean(), 
-                y=y_shift + prof_dict[f]['Amplitude_um_Norm'].max(), 
-                yshift=12, text=f"<b>Rep {i+1} ({clean_name})</b>", showarrow=False, 
-                font=dict(family="Times New Roman", size=15), bgcolor="rgba(255,255,255,0.7)"
-            )
-            for t in [-10, 0, 10]:
-                tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
+        rep_ticks_v, rep_ticks_t = [], []
         
-        fig_rep.update_layout(template="simple_white", height=850, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text, **AXIS_STYLE))
+        for i, f in enumerate(batch_files):
+            if f in prof_dict:
+                y_shift = i * offset_rep
+                p_data = prof_dict[f]
+                clean_name = os.path.splitext(f)[0]
+                
+                fig_rep.add_trace(go.Scatter(
+                    x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift,
+                    mode='lines', name=f"Rep {i+1}", showlegend=False
+                ))
+                
+                # Label positioning above peak
+                y_peak = (p_data['Amplitude_um_Norm'] + y_shift).max()
+                fig_rep.add_annotation(
+                    x=p_data['Length_mm'].min(), y=y_peak, yshift=10,
+                    text=f"<b>Rep {i+1} ({clean_name})</b>",
+                    showarrow=False, align="left", xanchor="left", yanchor="bottom",
+                    font=dict(family="Times New Roman", size=14)
+                )
+                
+                rep_ticks_v.append(y_shift)
+                rep_ticks_t.append("<b>0</b>")
+                if offset_rep > 35:
+                    for v in [-10, 10]:
+                        rep_ticks_v.append(v + y_shift)
+                        rep_ticks_t.append(f"<b>{v}</b>")
+
+        fig_rep.update_layout(
+            template="simple_white", height=850,
+            xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>",
+            xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=rep_ticks_v, ticktext=rep_ticks_t, **AXIS_STYLE)
+        )
         st.plotly_chart(fig_rep, use_container_width=True)
 
+    # TABS [3]: Representative Stack (Your code)
     with tabs[3]:
-        st.subheader("Representative Stack (Auto-Adjust Ticks)")
+        st.subheader("Representative Stack (Auto-Adjustable [-10, 0, 10] Ticks)")
         offset_global = st.slider("Group Offset (µm)", 1, 400, 100)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -168,41 +194,69 @@ if not df_master.empty:
         
         for i, sample in enumerate(unique_samples):
             sample_data = df_master[df_master['Sample'] == sample]
-            m_ra = sample_data['Ra'].mean()
-            s_ra = sample_data['Ra'].std()
-            closest_file = sample_data.iloc[(sample_data['Ra'] - m_ra).abs().argsort()[:1]]['File'].values[0]
+            mean_ra = sample_data['Ra'].mean()
+            std_ra = sample_data['Ra'].std()
+            closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
             
             y_shift = i * offset_global
-            p_data = prof_dict[closest_file]
+            current_profile = prof_dict[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
             
-            fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', showlegend=False))
+            fig_glob.add_trace(go.Scatter(
+                x=current_profile['Length_mm'], 
+                y=current_profile['Amplitude_um_Norm'] + y_shift, 
+                mode='lines', showlegend=False, line=dict(width=2)
+            ))
             
-            label = f"<b>{name}: <i>R<sub>a</sub></i> = {m_ra:.3f} ± {s_ra:.3f} µm</b>"
+            peak_y = (current_profile['Amplitude_um_Norm'] + y_shift).max()
+            inline_label = f"<b>{name}: <i>R<sub>a</sub></i> = {mean_ra:.3f} ± {std_ra:.3f} µm</b>"
+            
             fig_glob.add_annotation(
-                x=p_data['Length_mm'].min(), y=(p_data['Amplitude_um_Norm'] + y_shift).max(), 
-                yshift=15, text=label, showarrow=False, align="left", xanchor="left", yanchor="bottom",
-                font=dict(family="Times New Roman", size=18)
+                x=current_profile['Length_mm'].min(), 
+                y=peak_y, 
+                yshift=12, 
+                text=inline_label, 
+                showarrow=False, align="left", xanchor="left", yanchor="bottom",
+                font=dict(family="Times New Roman", size=16, color="black"), 
+                bgcolor=None 
             )
             
-            t_vals.append(y_shift); t_text.append(f"<b>0</b>")
-            if offset_global > 35:
+            t_vals.append(y_shift)
+            t_text.append(f"<b>0</b>")
+            
+            if offset_global > 35: 
                 for val in [-10, 10]:
-                    t_vals.append(val + y_shift); t_text.append(f"<b>{val}</b>")
+                    t_vals.append(val + y_shift)
+                    t_text.append(f"<b>{val}</b>")
         
-        fig_glob.update_layout(template="simple_white", height=900, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE))
+        fig_glob.update_layout(
+            template="simple_white", height=900,
+            xaxis_title="<b>Travel Length (mm)</b>", 
+            yaxis_title="<b>Amplitude (µm)</b>", 
+            xaxis=AXIS_STYLE, 
+            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE),
+            margin=dict(l=100, r=40, t=80, b=100)
+        )
         st.plotly_chart(fig_glob, use_container_width=True)
 
+    # TABS [4]: Export
     with tabs[4]:
-        st.subheader("Export")
-        wide_list = []
-        for fname, p_data in prof_dict.items():
-            meta = df_master[df_master['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
+        st.subheader("Data Export")
+        if not prof_dict:
+            st.warning("No profile data available to export.")
+        else:
+            export_list = []
+            for fname, p_data in prof_dict.items():
+                temp = p_data.copy()
+                temp['Source_File'] = fname
+                export_list.append(temp)
+            
+            full_export = pd.concat(export_list, ignore_index=True)
+            csv = full_export.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download All Profile Data (CSV)", csv, "roughness_data_export.csv", "text/csv")
+            
+            summary_csv = df_master.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Summary Statistics (CSV)", summary_csv, "summary_stats.csv", "text/csv")
+
 else:
-    st.info("👋 Upload data batches to activate results.")
+    st.info("👋 Use the sidebar to upload your sample replicates.")
