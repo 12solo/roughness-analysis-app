@@ -8,7 +8,7 @@ import re
 import io
 
 # ==========================================
-# 1. INITIALIZE SESSION STATE
+# 1. INITIALIZE SESSION STATE (Prevents KeyError)
 # ==========================================
 if 'summary_df' not in st.session_state:
     st.session_state['summary_df'] = pd.DataFrame()
@@ -44,7 +44,7 @@ class RoughnessLoader:
                 row_summary = meta.copy()
                 found_params = {}
 
-                # PASS 1: SUMMARY PARAMETERS
+                # PASS 1: EXTRACT SUMMARY PARAMETERS
                 for sheet in xl.sheet_names:
                     df_sheet = xl.parse(sheet, header=None)
                     for r in range(min(len(df_sheet), 100)):
@@ -62,7 +62,7 @@ class RoughnessLoader:
                 row_summary.update(found_params)
                 combined_summary.append(row_summary)
 
-                # PASS 2: PROFILE DATA (Col E & F)
+                # PASS 2: EXTRACT PROFILE DATA (Col E & F)
                 data_sheet_name = next((s for s in xl.sheet_names if "DATA" in s.upper()), None)
                 if data_sheet_name:
                     df_p = pd.read_excel(file, sheet_name=data_sheet_name, usecols=[4, 5])
@@ -82,16 +82,11 @@ def get_advanced_stats(df, group_cols, value_col):
     if value_col not in df.columns or df.empty:
         return pd.DataFrame()
     
-    # Calculate Mean, SD, Count
+    # Calculate Mean, SD, Count, and CV%
     stats_df = df.groupby(group_cols)[value_col].agg(['mean', 'std', 'count']).reset_index()
-    
-    # Calculate Coefficient of Variation (CV%) - Important for Scenario 1 (Replicates)
-    stats_df['CV%'] = (stats_df['std'] / stats_df['mean']) * 100
-    
-    # Calculate 95% Confidence Interval
+    stats_df['CV%'] = (stats_df['std'] / stats_df['mean'].replace(0, np.nan)) * 100
     stats_df['SEM'] = stats_df['std'] / np.sqrt(stats_df['count'])
     stats_df['CI_95'] = 1.96 * stats_df['SEM']
-    
     return stats_df
 
 # ==========================================
@@ -132,7 +127,7 @@ if not st.session_state['summary_df'].empty:
     tabs = st.tabs(["📊 Dataset", "📉 Profile Viewer", "📈 Scientific Stats", "🔬 Trend Analysis", "💾 Columnar Export"])
 
     with tabs[0]:
-        st.subheader("Combined Results Table")
+        st.subheader("Combined Individual Results")
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
@@ -143,80 +138,71 @@ if not st.session_state['summary_df'].empty:
             st.plotly_chart(fig, use_container_width=True)
 
     with tabs[2]:
-        st.subheader("Scientific Grouped Analysis")
+        st.subheader("Scenario 1: Repeatability & Replicate Analysis")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
         if params:
             col1, col2 = st.columns(2)
-            with col1:
-                p_sel = st.selectbox("Analysis Parameter", params)
-            with col2:
-                g_sel = st.multiselect("Group By (Select 1 or more)", ["Material", "Condition", "Day"], default=["Condition", "Day"])
+            with col1: p_sel = st.selectbox("Analysis Parameter", params)
+            with col2: g_sel = st.multiselect("Group By", ["Material", "Condition", "Day"], default=["Condition", "Day"])
             
             if g_sel:
                 res_stats = get_advanced_stats(df, g_sel, p_sel)
-                st.write("### Summary Statistics Table")
+                st.write("### Summary Statistics Table (Mean, SD, CV%)")
                 st.dataframe(res_stats.style.format(precision=4), use_container_width=True)
-                
-                # Significance Testing
-                if len(df[g_sel[0]].unique()) > 1:
-                    st.write("### Statistical Significance (ANOVA)")
-                    groups = [df[df[g_sel[0]] == val][p_sel].dropna() for val in df[g_sel[0]].unique()]
-                    f_val, p_val = stats.f_oneway(*groups)
-                    st.metric("ANOVA p-value", f"{p_val:.4f}")
-                    if p_val < 0.05:
-                        st.success("Significant difference detected between groups!")
-                    else:
-                        st.info("No statistically significant difference found.")
+                st.caption("💡 **CV% (Coefficient of Variation):** Values < 10% indicate high measurement repeatability.")
 
     with tabs[3]:
-        st.subheader("Degradation & Comparison Trends")
+        st.subheader("Scenario 2: Comparison & Degradation Trends")
         if params:
-            # SCENARIO 1: Box Plot for Distribution (Great for the 15 replicates)
-            st.write("#### Distribution of Measurements (Scenario 1: Replicates)")
-            fig_box = px.box(df, x="Condition", y=p_sel, color="Material", points="all", 
-                             title=f"Variance in {p_sel} Measurements", notched=True)
+            st.write("#### Comparison of Conditions (Boxplot)")
+            fig_box = px.box(df, x="Condition", y=p_sel, color="Material", points="all", notched=True)
             st.plotly_chart(fig_box, use_container_width=True)
             
-            # SCENARIO 2: Trend Plot with Error Bars (Great for different days/conditions)
-            st.write("#### Trend Analysis over Time (Scenario 2: Trends)")
+            st.write("#### Trend Analysis over Time (with 95% Confidence Interval)")
             trend_df = get_advanced_stats(df, ["Condition", "Day"], p_sel)
-            
-            fig_trend = go.Figure()
-            for condition in trend_df['Condition'].unique():
-                c_data = trend_df[trend_df['Condition'] == condition].sort_values('Day')
-                fig_trend.add_trace(go.Scatter(
-                    x=c_data['Day'], y=c_data['mean'],
-                    error_y=dict(type='data', array=c_data['CI_95'], visible=True),
-                    name=condition, mode='lines+markers'
-                ))
-            
-            fig_trend.update_layout(title=f"Mean {p_sel} Evolution (with 95% CI)",
-                                    xaxis_title="Days", yaxis_title=f"Mean {p_sel} (µm)",
-                                    template="plotly_white")
-            st.plotly_chart(fig_trend, use_container_width=True)
+            if not trend_df.empty:
+                fig_trend = go.Figure()
+                for condition in trend_df['Condition'].unique():
+                    c_data = trend_df[trend_df['Condition'] == condition].sort_values('Day')
+                    fig_trend.add_trace(go.Scatter(
+                        x=c_data['Day'], y=c_data['mean'],
+                        error_y=dict(type='data', array=c_data['CI_95'], visible=True),
+                        name=condition, mode='lines+markers'
+                    ))
+                fig_trend.update_layout(xaxis_title="Days", yaxis_title=f"Mean {p_sel} (µm)", template="plotly_white")
+                st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[4]:
         st.subheader("Bulk Export (Columnar Arrangement)")
-        # ... [Previous Columnar Export Code remains the same] ...
         if prof_dict:
-            naming_opt = st.radio("Label Columns by:", ["File Name", "Material_Day", "Condition_Day"], horizontal=True)
+            naming_opt = st.radio("Label and Categorize Columns by:", 
+                                  ["File Name", "Material_Day", "Condition_Day"], horizontal=True)
+            
             wide_dfs = []
             for fname, content in prof_dict.items():
                 temp_df = content['data'].copy()
                 m = content['meta']
-                header = fname if naming_opt == "File Name" else (f"{m['Material']}_Day{m['Day']}" if naming_opt == "Material_Day" else f"{m['Condition']}_Day{m['Day']}")
                 
-                # Rename columns and handle repeats
+                # Dynamic Header logic based on categorization
+                if naming_opt == "File Name": header = fname
+                elif naming_opt == "Material_Day": header = f"{m['Material']}_Day{m['Day']}"
+                else: header = f"{m['Condition']}_Day{m['Day']}"
+                
+                # Handle repeats for the columnar export
                 base_header = header
                 counter = 1
                 while f"{header}_Length(mm)" in [col for d in wide_dfs for col in d.columns]:
                     header = f"{base_header}_Repeat{counter}"
                     counter += 1
+
                 temp_df.columns = [f"{header}_Length(mm)", f"{header}_Amplitude(um)"]
                 wide_dfs.append(temp_df)
             
             master_wide_df = pd.concat(wide_dfs, axis=1)
+            st.write(f"Preview (Side-by-Side Arrangement):")
+            st.dataframe(master_wide_df.head(50), use_container_width=True)
+            
             csv_wide = master_wide_df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Columnar Profile Data (CSV)", csv_wide, "columnar_profiles.csv", "text/csv")
 else:
-    st.info("👋 Upload your files in the sidebar and click 'Process' to begin scientific analysis.")
+    st.info("👋 Upload your files in the sidebar and click 'Process' to begin.")
