@@ -7,32 +7,81 @@ import re
 import io
 
 # ==========================================
-# 1. DATA LOADER LOGIC (Internal)
+# 1. IMPROVED DATA LOADER (More Flexible)
 # ==========================================
 class RoughnessLoader:
     def __init__(self):
-        self.param_map = {
-            'ra': 'Ra', 'average roughness': 'Ra',
-            'rq': 'Rq', 'rms': 'Rq',
-            'rz': 'Rz', 'max height': 'Rz',
-            'rt': 'Rt'
+        # We look for these keywords anywhere in your Excel headers
+        self.targets = {
+            'Ra': ['ra', 'average', 'arithmetic'],
+            'Rq': ['rq', 'rms', 'root'],
+            'Rz': ['rz', 'max height', 'ten-point'],
+            'Rt': ['rt', 'total height']
         }
 
     def process_files(self, uploaded_files, metadata_list):
         combined_data = []
         for file, meta in zip(uploaded_files, metadata_list):
             try:
-                # Load Excel - Assumes data is on the first sheet
                 df_params = pd.read_excel(file, sheet_name=0)
+                # Clean up column names: lowercase and remove spaces/units
+                df_params.columns = [str(c).lower().strip() for c in df_params.columns]
+                
                 row_data = meta.copy()
-                for col in df_params.columns:
-                    clean_col = str(col).lower().strip()
-                    if clean_col in self.param_map:
-                        row_data[self.param_map[clean_col]] = df_params[col].iloc[0]
-                combined_data.append(row_data)
+                found_any = False
+
+                for standard_name, keywords in self.targets.items():
+                    # Check if any keyword exists in any of the Excel columns
+                    for col in df_params.columns:
+                        if any(k in col for k in keywords):
+                            row_data[standard_name] = pd.to_numeric(df_params[col].iloc[0], errors='coerce')
+                            found_any = True
+                            break
+                
+                if found_any:
+                    combined_data.append(row_data)
+                else:
+                    st.warning(f"⚠️ No roughness parameters found in {file.name}. Check your headers!")
             except Exception as e:
-                st.error(f"Error processing {file.name}: {e}")
+                st.error(f"❌ Error processing {file.name}: {e}")
+                
         return pd.DataFrame(combined_data)
+
+# ... [Keep your stats functions as they are] ...
+
+# ==========================================
+# 3. MAIN APP UI (With Safety Checks)
+# ==========================================
+# [Sidebar code stays the same]
+
+if 'master_df' in st.session_state:
+    df = st.session_state['master_df']
+    
+    if df.empty:
+        st.error("The combined dataset is empty. Please check your Excel file headers.")
+    else:
+        tab1, tab2, tab3 = st.tabs(["📊 Data", "📈 Stats", "📉 Plots"])
+        
+        with tab1:
+            st.write("Found the following data columns:")
+            st.dataframe(df)
+            
+        with tab2:
+            # ONLY show parameters that actually exist in the data
+            available_params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
+            
+            if not available_params:
+                st.error("No valid roughness parameters (Ra, Rq, etc.) were identified in the files.")
+            else:
+                param = st.selectbox("Parameter", available_params)
+                group = st.selectbox("Group By", ["Day", "Condition"])
+                
+                summary = get_stats_summary(df, group, param)
+                st.table(summary)
+                
+                if len(df[group].unique()) > 1:
+                    f, p = perform_anova(df, param, group)
+                    st.metric("ANOVA p-value", f"{p:.4f}")
 
 # ==========================================
 # 2. ANALYSIS LOGIC (Internal)
