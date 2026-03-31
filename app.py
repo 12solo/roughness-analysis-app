@@ -25,34 +25,35 @@ class RoughnessLoader:
         for file, meta in zip(uploaded_files, metadata_list):
             try:
                 xl = pd.ExcelFile(file)
-                sheet_names = [s.strip().upper() for s in xl.sheet_names]
+                # Standardize sheet names to uppercase for comparison
+                sheet_map = {s.strip().upper(): s for s in xl.sheet_names}
                 
                 row_data = meta.copy()
                 
-                # --- PASS 1: GET REPLICATES FROM 'DATA' SHEET (COL E & F) ---
-                replicate_points = []
-                if "DATA" in sheet_names:
-                    # Usecols [4, 5] corresponds to E and F
-                    df_data = pd.read_excel(file, sheet_name=xl.sheet_names[sheet_names.index("DATA")], usecols=[4, 5], header=None)
-                    # Flatten columns E and F into one long list of numbers
+                # Initialize empty columns to prevent KeyError later
+                row_data.update({'Ra_replicates_mean': np.nan, 'n_replicates': 0, 'std_error': 0})
+                
+                # --- PASS 1: DATA SHEET (REPLICATES) ---
+                if "DATA" in sheet_map:
+                    original_name = sheet_map["DATA"]
+                    # Load E and F (indices 4, 5)
+                    df_data = pd.read_excel(file, sheet_name=original_name, usecols=[4, 5], header=None)
+                    replicate_points = []
                     for col in df_data.columns:
                         for val in df_data[col]:
                             c_val = self.clean_value(val)
                             if not np.isnan(c_val):
                                 replicate_points.append(c_val)
-                
-                # Calculate Replicate Stats
-                if len(replicate_points) > 0:
-                    row_data['Ra_replicates_mean'] = np.mean(replicate_points)
-                    row_data['n_replicates'] = len(replicate_points)
-                    row_data['std_error'] = stats.sem(replicate_points) if len(replicate_points) > 1 else 0
-                else:
-                    row_data['n_replicates'] = 0
+                    
+                    if replicate_points:
+                        row_data['Ra_replicates_mean'] = np.mean(replicate_points)
+                        row_data['n_replicates'] = len(replicate_points)
+                        row_data['std_error'] = stats.sem(replicate_points) if len(replicate_points) > 1 else 0
 
-                # --- PASS 2: GET SUMMARY PARAMS (Ra, Rz, Rt) FROM ANY SHEET ---
+                # --- PASS 2: SUMMARY PARAMS (Ra, Rz, etc.) ---
                 for sheet in xl.sheet_names:
                     df_summary = xl.parse(sheet, header=None)
-                    for r in range(min(len(df_summary), 60)): # Search top 60 rows
+                    for r in range(min(len(df_summary), 60)):
                         for c in range(len(df_summary.columns)):
                             cell_str = str(df_summary.iloc[r, c]).lower().strip()
                             for std_name, keywords in self.targets.items():
@@ -67,7 +68,7 @@ class RoughnessLoader:
         return pd.DataFrame(combined_rows)
 
 # ==========================================
-# 2. UI & ANALYSIS
+# 3. UI & ANALYSIS
 # ==========================================
 st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
 st.title("🔬 Scientific Roughness Quality Analyzer")
@@ -76,10 +77,9 @@ st.sidebar.header("1. Upload Samples")
 uploaded_files = st.sidebar.file_uploader("Upload Excel Files", accept_multiple_files=True, type=['xlsx'])
 
 if uploaded_files:
-    # Metadata for grouping/comparison
-    mat_type = st.sidebar.selectbox("Material Type", ["PLA-Pure", "PLA-Wood", "PLA-Carbon", "Other"])
-    condition = st.sidebar.selectbox("Condition", ["Control (0d)", "Oven", "UV Ageing", "Humidity"])
-    ageing_days = st.sidebar.number_input("Ageing Time (Days)", min_value=0, value=0)
+    mat_type = st.sidebar.text_input("Material ID", "PLA_Comp_01")
+    condition = st.sidebar.selectbox("Condition", ["Control", "Oven", "UV Ageing", "Humidity"])
+    ageing_days = st.sidebar.number_input("Days", min_value=0, value=0)
 
     if st.sidebar.button("Run Full Analysis", type="primary"):
         loader = RoughnessLoader()
@@ -93,34 +93,43 @@ if 'master_df' in st.session_state:
 
     with t1:
         st.subheader("Replicate Verification (Target n ≥ 9)")
-        # Show which files met the scientific quality threshold
-        def color_n(val):
-            color = 'red' if val < 9 else 'green'
-            return f'color: {color}; font-weight: bold'
         
-        st.dataframe(df[['File', 'Material', 'Condition', 'n_replicates', 'Ra_replicates_mean', 'std_error']].style.applymap(color_n, subset=['n_replicates']), use_container_width=True)
-        st.info("💡 Scientific standard recommends at least 9 repeated measurements per sample to account for surface heterogeneity.")
+        # Check if we successfully found any replicates
+        if 'n_replicates' in df.columns and df['n_replicates'].sum() > 0:
+            def color_n(val):
+                return 'color: red; font-weight: bold' if val < 9 else 'color: green'
+            
+            # List of columns we WANT to show
+            cols_to_show = ['File', 'Material', 'Condition', 'n_replicates', 'Ra_replicates_mean', 'std_error']
+            # Only show columns that actually exist in the dataframe
+            existing_cols = [c for c in cols_to_show if c in df.columns]
+            
+            st.dataframe(df[existing_cols].style.applymap(color_n, subset=['n_replicates'] if 'n_replicates' in existing_cols else []), use_container_width=True)
+        else:
+            st.warning("⚠️ No 'DATA' sheet or replicate values in Columns E/F were found. Please check your Excel file structure.")
+            st.write("Current Columns Extracted:", list(df.columns))
 
     with t2:
         st.subheader("Statistical Significance")
-        # Compare Different Conditions
-        if len(df['Condition'].unique()) > 1 or len(df['Material'].unique()) > 1:
-            param = st.selectbox("Parameter to Compare", ["Ra_replicates_mean", "Ra", "Rz", "Rt"])
+        # Find which numeric parameters were extracted
+        numeric_params = [p for p in ["Ra_replicates_mean", "Ra", "Rz", "Rt"] if p in df.columns]
+        
+        if numeric_params:
+            param = st.selectbox("Parameter to Compare", numeric_params)
             group_by = st.radio("Group By:", ["Condition", "Material"])
             
-            # Grouping the data
-            groups = [df[df[group_by] == g][param].dropna() for g in df[group_by].unique()]
-            if len(groups) > 1:
-                f_stat, p_val = stats.f_oneway(*groups)
-                st.metric("ANOVA p-value", f"{p_val:.4f}")
-                if p_val < 0.05:
-                    st.success("Significant difference found! The ageing conditions/materials significantly affect surface roughness.")
-                else:
-                    st.warning("No significant difference found (p > 0.05).")
+            if len(df[group_by].unique()) > 1:
+                groups = [df[df[group_by] == g][param].dropna() for g in df[group_by].unique()]
+                if all(len(g) > 0 for g in groups):
+                    f_stat, p_val = stats.f_oneway(*groups)
+                    st.metric("ANOVA p-value", f"{p_val:.4f}")
+                    if p_val < 0.05: st.success("Significant difference found!")
+                    else: st.info("No significant difference detected.")
+        else:
+            st.error("No numeric parameters found to compare.")
 
     with t3:
-        st.subheader("Comparative Analysis Visuals")
-        # Multi-factor Box Plot
-        fig = px.box(df, x="Condition", y="Ra_replicates_mean", color="Material",
-                     points="all", notched=True, title="Ra Mean Comparison across Conditions")
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Visual Analysis")
+        if 'param' in locals() and not df.empty:
+            fig = px.box(df, x=group_by, y=param, color="Condition", points="all", notched=True)
+            st.plotly_chart(fig, use_container_width=True)
