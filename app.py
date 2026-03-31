@@ -40,6 +40,7 @@ class RoughnessLoader:
                 row_summary = meta_template.copy()
                 row_summary['File'] = file.name
                 
+                # Extract Summary Parameters
                 for sheet in xl.sheet_names:
                     df_sheet = xl.parse(sheet, header=None)
                     for r in range(min(len(df_sheet), 100)):
@@ -53,6 +54,7 @@ class RoughnessLoader:
                                     if not np.isnan(val): row_summary[std_key] = val
                 combined_summary.append(row_summary)
 
+                # Profile Normalization (Col E & F)
                 data_sheet = next((s for s in xl.sheet_names if "DATA" in s.upper()), None)
                 if data_sheet:
                     df_p = pd.read_excel(file, sheet_name=data_sheet, usecols=[4, 5])
@@ -62,22 +64,23 @@ class RoughnessLoader:
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
                         df_p['Sample'] = meta_template['Sample']
                         profile_map[file.name] = df_p
+
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error processing {file.name}: {e}")
         return pd.DataFrame(combined_summary), profile_map
 
 # ==========================================
 # 3. UI & SIDEBAR
 # ==========================================
 st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
-st.title("🔬 Scientific Roughness Analyzer")
+st.title("🔬 Scientific Surface Roughness Analyzer")
 
 with st.sidebar:
     st.header("1. Data Input")
     with st.form("input_form", clear_on_submit=True):
         s_name = st.text_input("Sample/Batch ID", "Sample A")
         s_files = st.file_uploader("Upload Replicate Files (.xlsx)", accept_multiple_files=True)
-        submit = st.form_submit_button("Add Sample Batch")
+        submit = st.form_submit_button("Process & Add Sample Batch")
 
     if submit and s_files:
         loader = RoughnessLoader()
@@ -85,11 +88,14 @@ with st.sidebar:
         new_sum, new_prof = loader.process_files(s_files, meta)
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
+        st.success(f"Added replicates for {s_name}.")
 
+    st.markdown("---")
+    st.header("2. Legend Customization")
     if not st.session_state['master_df'].empty:
-        st.header("2. Legend Customization")
-        for s in sorted(st.session_state['master_df']['Sample'].unique()):
-            st.session_state['legend_map'][s] = st.text_input(f"Label '{s}':", s)
+        unique_samples = sorted(st.session_state['master_df']['Sample'].unique())
+        for s in unique_samples:
+            st.session_state['legend_map'][s] = st.text_input(f"Rename '{s}':", s)
 
     if st.button("Reset Entire Study", type="primary"):
         st.session_state['master_df'] = pd.DataFrame()
@@ -104,73 +110,115 @@ df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
+    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🌊 Individual Ra Profile", "🎨 Batch Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
     with tabs[0]:
+        st.subheader("Master Summary Dataset")
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
+        st.subheader("Inter-Sample Comparison")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
-        p_sel = st.selectbox("Select Parameter", params)
-        plot_df = df.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-        plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
-        fig_trend = px.line(plot_df, x="Sample", y="mean", error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), markers=True, template="simple_white")
-        fig_trend.update_layout(xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
-                                yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2))
-        st.plotly_chart(fig_trend, use_container_width=True)
+        if params:
+            p_sel = st.selectbox("Select Parameter for Trends", params)
+            plot_df = df.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
+            plot_df['Display_Name'] = plot_df['Sample'].map(st.session_state['legend_map'])
+            
+            fig_trend = px.line(plot_df, x="Display_Name", y="mean", 
+                                error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), 
+                                markers=True, template="simple_white")
+            fig_trend.update_layout(
+                xaxis_title="<b>Sample ID</b>",
+                yaxis_title=f"<b>Mean {p_sel} (µm)</b>",
+                xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
+                yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2)
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[2]:
+        st.subheader("Individual Normalized Profile Inspection")
+        sel_f = st.selectbox("Select Test File to View:", list(profiles.keys()))
+        p_data = profiles[sel_f]
+        fig_p = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', template="simple_white")
+        fig_p.add_hline(y=0, line_dash="dash", line_color="red")
+        fig_p.update_layout(
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Amplitude (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2)
+        )
+        st.plotly_chart(fig_p, use_container_width=True)
+
+    with tabs[3]:
         st.subheader("Batch Replicate Inspection (Real Local Ticks)")
-        batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
+        batch_to_check = st.selectbox("Select Batch to Inspect:", sorted(df['Sample'].unique()))
         batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
-        offset_rep = st.slider("Replicate Offset (µm)", 1, 50, 10)
+        offset_rep = st.slider("Replicate Vertical Offset (µm)", 1, 100, 20)
         
         fig_rep = go.Figure()
         tick_vals, tick_text = [], []
+        
         for i, f in enumerate(batch_files):
-            y_shift = i * offset_rep
-            fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], y=profiles[f]['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}"))
-            for t in [-5, 0, 5]:
-                tick_vals.append(t + y_shift); tick_text.append(str(t))
-
-        fig_rep.update_layout(template="simple_white", xaxis_title="<b>Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>",
-                            yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text, mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
-                            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2))
+            if f in profiles:
+                y_shift = i * offset_rep
+                fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], 
+                                            y=profiles[f]['Amplitude_um_Norm'] + y_shift, 
+                                            mode='lines', name=f"Rep {i+1}"))
+                # Local Axis Values (Real numbers for each line)
+                for t in [-5, 0, 5]:
+                    tick_vals.append(t + y_shift)
+                    tick_text.append(str(t))
+        
+        fig_rep.update_layout(
+            template="simple_white",
+            font=dict(family="Arial", size=14, color="black"),
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Amplitude (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16)),
+            yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text, mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16), autorange=True),
+            margin=dict(l=80, r=40, t=40, b=80)
+        )
         st.plotly_chart(fig_rep, use_container_width=True)
 
-    with tabs[3]:
-        st.subheader("Representative Profile Stack (Real Local Ticks)")
+    with tabs[4]:
+        st.subheader("Representative Profile Comparison (Real Local Ticks)")
         offset_global = st.slider("Group Vertical Offset (µm)", 1, 200, 50)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
         
         unique_samples = sorted(df['Sample'].unique())
         for i, sample in enumerate(unique_samples):
+            # Select Real Representative (Closest to Mean Ra)
             sample_data = df[df['Sample'] == sample]
             mean_ra = sample_data['Ra'].mean()
             closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
             
-            p_data = profiles[closest_file]
-            name = st.session_state['legend_map'].get(sample, sample)
-            y_shift = i * offset_global
-            
-            fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, line=dict(width=2.5)))
-            
-            # Add Real Axis Values as local ticks
-            for t in [-10, 0, 10]:
-                t_vals.append(t + y_shift); t_text.append(str(t))
-
+            if closest_file in profiles:
+                p_data = profiles[closest_file]
+                y_shift = i * offset_global
+                name = st.session_state['legend_map'].get(sample, sample)
+                fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], 
+                                             y=p_data['Amplitude_um_Norm'] + y_shift, 
+                                             mode='lines', name=name, line=dict(width=2.5)))
+                # Real Local Axis Ticks
+                for t in [-10, 0, 10]:
+                    t_vals.append(t + y_shift)
+                    t_text.append(str(t))
+        
         fig_glob.update_layout(
-            template="simple_white", height=700,
-            xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>",
+            template="simple_white",
             font=dict(family="Arial", size=14, color="black"),
-            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, autorange=True),
-            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5),
-            legend=dict(bordercolor="black", borderwidth=1)
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Amplitude (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16)),
+            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16), autorange=True),
+            legend=dict(bordercolor="black", borderwidth=1),
+            margin=dict(l=80, r=40, t=40, b=80)
         )
         st.plotly_chart(fig_glob, use_container_width=True)
 
-    with tabs[4]:
+    with tabs[5]:
+        st.subheader("Unified CSV Export")
         wide_list = []
         for fname, p_data in profiles.items():
             meta = df[df['File'] == fname].iloc[0]
@@ -179,6 +227,6 @@ if not df.empty:
             temp.columns = [f"{header}_L", f"{header}_Amp"]
             wide_list.append(temp)
         if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_export.csv")
+            st.download_button("Download Processed Profiles (CSV)", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_profiles.csv")
 else:
-    st.info("👋 Upload sample batches in the sidebar to begin.")
+    st.info("👋 Use the sidebar to upload your sample replicates. The dashboard will populate automatically.")
