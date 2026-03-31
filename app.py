@@ -115,29 +115,11 @@ AXIS_STYLE = dict(
 if not df_master.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
-    with tabs[0]:
-        st.subheader("Summary Table")
-        st.dataframe(df_master, use_container_width=True)
-
-    with tabs[1]:
-        st.subheader("Inter-Sample Trends")
-        params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df_master.columns]
-        if params:
-            p_sel = st.selectbox("Select Parameter", params)
-            plot_df = df_master.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-            plot_df['Display_Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
-            
-            fig_trend = px.line(plot_df, x="Display_Sample", y="mean", 
-                                error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), 
-                                markers=True, template="simple_white")
-            fig_trend.update_layout(xaxis_title="<b>Sample ID</b>", yaxis_title=f"<b>Mean {p_sel} (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
-            st.plotly_chart(fig_trend, use_container_width=True)
-
     with tabs[2]:
         st.subheader("Batch Replicate Stack")
         batch_to_check = st.selectbox("Select Batch:", sorted(df_master['Sample'].unique()))
         batch_files = sorted(df_master[df_master['Sample'] == batch_to_check]['File'].tolist())
-        offset_rep = st.slider("Vertical Offset (µm)", 1, 100, 20)
+        offset_rep = st.slider("Vertical Offset (µm)", 1, 100, 25)
         
         fig_rep = go.Figure()
         tick_vals, tick_text = [], []
@@ -147,16 +129,15 @@ if not df_master.empty:
             current_profile = prof_dict[f]
             fig_rep.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
             
-            # Rep Legend positioning: Above the peak of the current line
-            y_pos = y_shift + current_profile['Amplitude_um_Norm'].max()
+            # Positioning Legend above the start of the line to avoid data overlap
             fig_rep.add_annotation(
-                x=current_profile['Length_mm'].mean(), 
-                y=y_pos, 
-                yshift=10,
+                x=current_profile['Length_mm'].min(), 
+                y=y_shift, 
+                yshift=25, # Push text up away from the line
                 text=f"<b>Rep {i+1} ({clean_name})</b>", 
-                showarrow=False, 
+                showarrow=False, align="left", xanchor="left",
                 font=dict(family="Times New Roman", size=14, color="black"),
-                bgcolor="rgba(255,255,255,0.8)", borderwidth=0
+                bgcolor=None # Removed background to keep lines visible
             )
             for t in [-5, 0, 5]:
                 tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
@@ -165,8 +146,8 @@ if not df_master.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Stack (No Line Overlap)")
-        offset_global = st.slider("Group Offset (µm)", 1, 200, 50)
+        st.subheader("Representative Stack (Transparent Legend)")
+        offset_global = st.slider("Group Offset (µm)", 1, 250, 60)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
         unique_samples = sorted(df_master['Sample'].unique())
@@ -182,33 +163,20 @@ if not df_master.empty:
             
             fig_glob.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
             
-            # PLACEMENT LOGIC: Use 'yanchor="bottom"' and 'yshift' to keep label above line peaks
-            y_max = y_shift + current_profile['Amplitude_um_Norm'].max()
+            # Rep Legend: Aligned left, pushed high enough to clear peaks
             fig_glob.add_annotation(
                 x=current_profile['Length_mm'].min(), 
-                y=y_max, 
-                yshift=15, # Pushes text 15 pixels above the peak
+                y=y_shift, 
+                yshift=35, # Increased shift to move text out of the way of peaks
                 text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
                 showarrow=False, align="left", xanchor="left", yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor="rgba(255,255,255,0.9)", borderwidth=0
+                bgcolor=None # Transparent background ensures lines are visible
             )
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
         
         fig_glob.update_layout(template="simple_white", height=850, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE))
         st.plotly_chart(fig_glob, use_container_width=True)
-
-    with tabs[4]:
-        st.subheader("Export Dataset")
-        wide_list = []
-        for fname, p_data in prof_dict.items():
-            meta = df_master[df_master['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_export.csv")
 else:
     st.info("👋 Use the sidebar to upload your sample replicates.")
