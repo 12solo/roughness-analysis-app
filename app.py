@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from scipy import stats
 import re
 
 # ==========================================
@@ -59,12 +59,12 @@ class RoughnessLoader:
                     df_p.columns = ['Length_mm', 'Amplitude_um']
                     df_p = df_p.apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
                     if not df_p.empty:
-                        # Scientific Normalization
+                        # Normalize to zero-mean
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
                         df_p['Sample'] = meta_template['Sample']
                         profile_map[file.name] = df_p
             except Exception as e:
-                st.error(f"Error in {file.name}: {e}")
+                st.error(f"Error: {e}")
         return pd.DataFrame(combined_summary), profile_map
 
 # ==========================================
@@ -76,9 +76,9 @@ st.title("🔬 Scientific Roughness Analyzer")
 with st.sidebar:
     st.header("1. Data Input")
     with st.form("input_form", clear_on_submit=True):
-        s_name = st.text_input("Sample/Batch ID", "Sample A")
-        s_files = st.file_uploader("Upload Replicate Files (.xlsx)", accept_multiple_files=True)
-        submit = st.form_submit_button("Add Sample Batch")
+        s_name = st.text_input("Sample ID", "Sample A")
+        s_files = st.file_uploader("Upload Replicates (.xlsx)", accept_multiple_files=True)
+        submit = st.form_submit_button("Add Batch")
 
     if submit and s_files:
         loader = RoughnessLoader()
@@ -86,85 +86,85 @@ with st.sidebar:
         new_sum, new_prof = loader.process_files(s_files, meta)
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
-        st.success(f"Added replicates for {s_name}.")
 
-    st.markdown("---")
     st.header("2. Legend Customization")
     if not st.session_state['master_df'].empty:
-        unique_samples = sorted(st.session_state['master_df']['Sample'].unique())
-        for s in unique_samples:
-            st.session_state['legend_map'][s] = st.text_input(f"Rename '{s}':", s)
+        for s in sorted(st.session_state['master_df']['Sample'].unique()):
+            st.session_state['legend_map'][s] = st.text_input(f"Label '{s}':", s)
 
-    if st.button("Reset Entire Study", type="primary"):
+    if st.button("Reset Study", type="primary"):
         st.session_state['master_df'] = pd.DataFrame()
         st.session_state['profile_dict'] = {}
         st.session_state['legend_map'] = {}
         st.rerun()
 
 # ==========================================
-# 4. DASHBOARD TABS
+# 4. DASHBOARD
 # ==========================================
 df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Batch Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
+    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Batch Stack", "🏛️ Representative Stack", "💾 Export"])
 
     with tabs[2]:
-        st.subheader("Batch Replicate Inspection (Real Axis Values)")
+        st.subheader("Batch Replicate Stack (Single Main Axis)")
         batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
         batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
+        offset_val = st.slider("Vertical Offset (µm)", 1, 100, 20, key="rep_off")
         
-        if batch_files:
-            # Create subplots: one row per file
-            fig_rep = make_subplots(rows=len(batch_files), cols=1, shared_xaxes=True, vertical_spacing=0.02)
-            
-            for i, f in enumerate(batch_files):
-                p_data = profiles[f]
-                fig_rep.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'], 
-                                             mode='lines', name=f"Rep {i+1}"), row=i+1, col=1)
-                # Apply Mirror Box and Ticks to each row
-                fig_rep.update_yaxes(title_text="Amp (µm)", row=i+1, col=1, mirror=True, showline=True, linecolor='black', ticks='outside')
-            
-            fig_rep.update_xaxes(title_text="Travel Length (mm)", row=len(batch_files), col=1, mirror=True, showline=True, linecolor='black', ticks='outside')
-            fig_rep.update_layout(height=200*len(batch_files), template="simple_white", showlegend=False, font=dict(family="Arial", color="black"))
-            st.plotly_chart(fig_rep, use_container_width=True)
+        fig_rep = go.Figure()
+        for i, f in enumerate(batch_files):
+            p_data = profiles[f]
+            fig_rep.add_trace(go.Scatter(
+                x=p_data['Length_mm'], 
+                y=p_data['Amplitude_um_Norm'] + (i * offset_val),
+                mode='lines', name=f"Rep {i+1}"
+            ))
+        
+        fig_rep.update_layout(
+            template="simple_white",
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Real Amplitude + Offset (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, autorange=True),
+            font=dict(family="Arial", size=14, color="black")
+        )
+        st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Profile Comparison (Real Axis Values)")
-        unique_samples = sorted(df['Sample'].unique())
+        st.subheader("Representative Profile Stack (Single Main Axis)")
+        offset_global = st.slider("Group Vertical Offset (µm)", 1, 200, 50, key="glob_off")
+        fig_glob = go.Figure()
         
-        if unique_samples:
-            # Create subplots: one row per Sample
-            fig_glob = make_subplots(rows=len(unique_samples), cols=1, shared_xaxes=True, vertical_spacing=0.05)
+        unique_samples = sorted(df['Sample'].unique())
+        for i, sample in enumerate(unique_samples):
+            # Select Representative (Closest to Mean Ra)
+            sample_data = df[df['Sample'] == sample]
+            mean_ra = sample_data['Ra'].mean()
+            closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
             
-            for i, sample in enumerate(unique_samples):
-                sample_data = df[df['Sample'] == sample]
-                mean_ra = sample_data['Ra'].mean()
-                closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
-                
-                if closest_file in profiles:
-                    p_data = profiles[closest_file]
-                    name = st.session_state['legend_map'].get(sample, sample)
-                    fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'], 
-                                                 mode='lines', name=name), row=i+1, col=1)
-                    
-                    fig_glob.update_yaxes(title_text=f"{name} (µm)", row=i+1, col=1, mirror=True, showline=True, linecolor='black', linewidth=2, ticks='outside')
+            p_data = profiles[closest_file]
+            name = st.session_state['legend_map'].get(sample, sample)
+            
+            fig_glob.add_trace(go.Scatter(
+                x=p_data['Length_mm'], 
+                y=p_data['Amplitude_um_Norm'] + (i * offset_global), 
+                mode='lines', name=name, line=dict(width=2.5)
+            ))
 
-            fig_glob.update_xaxes(title_text="<b>Travel Length (mm)</b>", row=len(unique_samples), col=1, mirror=True, showline=True, linecolor='black', linewidth=2, ticks='outside')
-            fig_glob.update_layout(height=300*len(unique_samples), template="simple_white", showlegend=False, font=dict(family="Arial", size=12, color="black"))
-            st.plotly_chart(fig_glob, use_container_width=True)
+        fig_glob.update_layout(
+            template="simple_white",
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Real Amplitude + Group Offset (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, autorange=True),
+            font=dict(family="Arial", size=14, color="black"),
+            legend=dict(bordercolor="black", borderwidth=1),
+            height=700
+        )
+        st.plotly_chart(fig_glob, use_container_width=True)
+        st.info("💡 Each profile shows its actual topography centered at zero and offset vertically for group comparison.")
 
-    with tabs[4]:
-        # Export logic remains same
-        wide_list = []
-        for fname, p_data in profiles.items():
-            meta = df[df['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
 else:
-    st.info("👋 Upload your sample batches to begin.")
+    st.info("👋 Upload data batches to begin.")
