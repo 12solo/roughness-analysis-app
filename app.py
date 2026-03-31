@@ -130,10 +130,32 @@ if 'summary_df' in st.session_state:
             fig_box = px.box(sum_df, x="Day", y=p_sel, color="Condition", points="all", notched=True)
             st.plotly_chart(fig_box, use_container_width=True)
 
-    with tabs[3]:
-        st.subheader("Download Unified Data")
+   # Replace your Tab 3 (Export) code with this more efficient version:
+
+with tabs[3]:
+    st.subheader("Download Unified Data")
+    
+    if not sum_df.empty:
+        st.write("### 1. Summary Report")
+        csv_sum = sum_df.to_csv(index=False).encode('utf-8')
+        st.download_button("Download Summary CSV", csv_sum, "summary.csv", "text/csv")
+
+    if not prof_df.empty:
+        st.write("### 2. Master Profile Data (Columns E & F)")
+        st.info(f"Total data points extracted: {len(prof_df):,}")
         
-        c1, c2 = st.columns(2)
+        # We only show a preview of the first 50 rows to keep the UI fast
+        st.write("Preview of first 50 rows:")
+        st.dataframe(prof_df.head(50), use_container_width=True)
+        
+        # Efficient download handling
+        csv_prof = prof_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Master Profiles CSV",
+            data=csv_prof,
+            file_name="master_profiles_E_F.csv",
+            mime="text/csv"
+        )
         
         # 1. Download Summary
         with c1:
