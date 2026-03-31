@@ -4,5 +4,3 @@ numpy
 openpyxl
 plotly
 scipy
-statsmodels
-xlsxwriter
