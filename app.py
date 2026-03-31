@@ -59,7 +59,6 @@ class RoughnessLoader:
                     df_p.columns = ['Length_mm', 'Amplitude_um']
                     df_p = df_p.apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
                     if not df_p.empty:
-                        # Normalize to zero-mean
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
                         df_p['Sample'] = meta_template['Sample']
                         profile_map[file.name] = df_p
@@ -76,9 +75,9 @@ st.title("🔬 Scientific Roughness Analyzer")
 with st.sidebar:
     st.header("1. Data Input")
     with st.form("input_form", clear_on_submit=True):
-        s_name = st.text_input("Sample ID", "Sample A")
-        s_files = st.file_uploader("Upload Replicates (.xlsx)", accept_multiple_files=True)
-        submit = st.form_submit_button("Add Batch")
+        s_name = st.text_input("Sample/Batch ID", "Sample A")
+        s_files = st.file_uploader("Upload Replicate Files (.xlsx)", accept_multiple_files=True)
+        submit = st.form_submit_button("Add Sample Batch")
 
     if submit and s_files:
         loader = RoughnessLoader()
@@ -92,79 +91,96 @@ with st.sidebar:
         for s in sorted(st.session_state['master_df']['Sample'].unique()):
             st.session_state['legend_map'][s] = st.text_input(f"Label '{s}':", s)
 
-    if st.button("Reset Study", type="primary"):
+    if st.button("Reset Entire Study", type="primary"):
         st.session_state['master_df'] = pd.DataFrame()
         st.session_state['profile_dict'] = {}
         st.session_state['legend_map'] = {}
         st.rerun()
 
 # ==========================================
-# 4. DASHBOARD
+# 4. DASHBOARD TABS
 # ==========================================
 df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Batch Stack", "🏛️ Representative Stack", "💾 Export"])
-
-    with tabs[2]:
-        st.subheader("Batch Replicate Stack (Single Main Axis)")
-        batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
-        batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
-        offset_val = st.slider("Vertical Offset (µm)", 1, 100, 20, key="rep_off")
-        
-        fig_rep = go.Figure()
-        for i, f in enumerate(batch_files):
-            p_data = profiles[f]
-            fig_rep.add_trace(go.Scatter(
-                x=p_data['Length_mm'], 
-                y=p_data['Amplitude_um_Norm'] + (i * offset_val),
-                mode='lines', name=f"Rep {i+1}"
-            ))
-        
-        fig_rep.update_layout(
-            template="simple_white",
-            xaxis_title="<b>Travel Length (mm)</b>",
-            yaxis_title="<b>Real Amplitude + Offset (µm)</b>",
-            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5),
-            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, autorange=True),
-            font=dict(family="Arial", size=14, color="black")
-        )
-        st.plotly_chart(fig_rep, use_container_width=True)
+    tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
     with tabs[3]:
-        st.subheader("Representative Profile Stack (Single Main Axis)")
-        offset_global = st.slider("Group Vertical Offset (µm)", 1, 200, 50, key="glob_off")
+        st.subheader("Representative Profile Comparison (Local Axis Labels)")
+        offset_global = st.slider("Vertical Offset (µm)", 1, 200, 40, key="glob_off")
+        
         fig_glob = go.Figure()
+        tick_vals = []
+        tick_text = []
         
         unique_samples = sorted(df['Sample'].unique())
         for i, sample in enumerate(unique_samples):
-            # Select Representative (Closest to Mean Ra)
+            # Find Representative
             sample_data = df[df['Sample'] == sample]
             mean_ra = sample_data['Ra'].mean()
             closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
             
             p_data = profiles[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
+            y_shift = i * offset_global
             
+            # Add Trace
             fig_glob.add_trace(go.Scatter(
-                x=p_data['Length_mm'], 
-                y=p_data['Amplitude_um_Norm'] + (i * offset_global), 
+                x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift,
                 mode='lines', name=name, line=dict(width=2.5)
             ))
+            
+            # Generate Local Ticks for the Y-Axis (Real Axis Values)
+            # We show -5, 0, 5 µm relative to the base of this specific profile
+            local_ticks = [-10, -5, 0, 5, 10] 
+            for t in local_ticks:
+                tick_vals.append(t + y_shift)
+                tick_text.append(str(t))
 
+        # Scientific Layout with Mirror Box and Local Ticks
         fig_glob.update_layout(
             template="simple_white",
+            height=800,
             xaxis_title="<b>Travel Length (mm)</b>",
-            yaxis_title="<b>Real Amplitude + Group Offset (µm)</b>",
-            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5),
-            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, autorange=True),
+            yaxis_title="<b>Amplitude (µm)</b>",
             font=dict(family="Arial", size=14, color="black"),
+            # Y-AXIS CONFIGURATION
+            yaxis=dict(
+                tickmode='array',
+                tickvals=tick_vals,
+                ticktext=tick_text,
+                mirror=True,
+                ticks='outside',
+                showline=True,
+                linecolor='black',
+                linewidth=2.5,
+                title_standoff=20
+            ),
+            # X-AXIS CONFIGURATION
+            xaxis=dict(
+                mirror=True,
+                ticks='outside',
+                showline=True,
+                linecolor='black',
+                linewidth=2.5
+            ),
             legend=dict(bordercolor="black", borderwidth=1),
-            height=700
+            margin=dict(l=100, r=40, t=40, b=100)
         )
         st.plotly_chart(fig_glob, use_container_width=True)
-        st.info("💡 Each profile shows its actual topography centered at zero and offset vertically for group comparison.")
+        st.info("💡 The Y-axis values now reflect the real local amplitude (µm) for each stacked profile.")
 
+    with tabs[4]:
+        # Export remains identical
+        wide_list = []
+        for fname, p_data in profiles.items():
+            meta = df[df['File'] == fname].iloc[0]
+            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
+            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
+            temp.columns = [f"{header}_L", f"{header}_Amp"]
+            wide_list.append(temp)
+        if wide_list:
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_profiles.csv")
 else:
-    st.info("👋 Upload data batches to begin.")
+    st.info("👋 Upload data batches to generate your publication-ready figures.")
