@@ -6,19 +6,15 @@ from scipy import stats
 import re
 
 # ==========================================
-# 1. UNIVERSAL SCIENTIFIC LOADER
+# 1. SCIENTIFIC DATA LOADER (Column E & F)
 # ==========================================
 class RoughnessLoader:
     def __init__(self):
-        self.targets = {
-            'Ra': ['ra', 'arithmetic', 'average roughness'],
-            'Rq': ['rq', 'rms'],
-            'Rz': ['rz', 'max height'],
-            'Rt': ['rt', 'total height']
-        }
+        self.targets = {'Ra': ['ra', 'arithmetic'], 'Rq': ['rq', 'rms'], 
+                        'Rz': ['rz', 'max height'], 'Rt': ['rt', 'total height']}
 
     def clean_value(self, val):
-        if pd.isna(val) or str(val).strip() == "": return np.nan
+        if pd.isna(val): return np.nan
         if isinstance(val, (int, float)): return float(val)
         text = str(val).replace(',', '.').strip()
         match = re.search(r"[-+]?\d*\.\d+|\d+", text)
@@ -29,97 +25,114 @@ class RoughnessLoader:
         for file, meta in zip(uploaded_files, metadata_list):
             try:
                 xl = pd.ExcelFile(file)
-                sheet_map = {s.strip().upper(): s for s in xl.sheet_names}
-                row_data = meta.copy()
+                sheet_names = [s.strip() for s in xl.sheet_names]
                 
-                # Pre-initialize scientific columns to prevent KeyErrors
-                row_data.update({'Ra_mean': np.nan, 'n_samples': 0, 'std_err': 0})
+                # Check for "DATA" sheet for repeated measurements
+                data_points = []
+                if "DATA" in sheet_names:
+                    # Load columns E and F (indices 4 and 5)
+                    df_data = pd.read_excel(file, sheet_name="DATA", usecols=[4, 5], header=None)
+                    # Flatten both columns and clean
+                    raw_points = df_data.values.flatten()
+                    data_points = [self.clean_value(x) for x in raw_points if not pd.isna(self.clean_value(x))]
 
-                # --- PASS 1: REPLICATE EXTRACTION (Sheet: DATA, Col: E, F) ---
-                if "DATA" in sheet_map:
-                    df_data = pd.read_excel(file, sheet_name=sheet_map["DATA"], usecols="E:F", header=None)
-                    points = [self.clean_value(x) for x in df_data.values.flatten() if not pd.isna(self.clean_value(x))]
-                    if points:
-                        row_data['Ra_mean'] = np.mean(points)
-                        row_data['n_samples'] = len(points)
-                        row_data['std_err'] = stats.sem(points) if len(points) > 1 else 0
-
-                # --- PASS 2: SUMMARY PARAMETER SCAN (All Sheets) ---
+                # Also search for summary params (Ra, Rz, etc.) across all sheets
+                summary_params = {}
                 for sheet in xl.sheet_names:
                     df = xl.parse(sheet, header=None)
-                    for r in range(min(len(df), 100)):
+                    for r in range(min(len(df), 50)): # Scan top 50 rows
                         for c in range(len(df.columns)):
                             cell_str = str(df.iloc[r, c]).lower().strip()
                             for std_name, keywords in self.targets.items():
-                                if any(k in cell_str for k in keywords) and std_name not in row_data:
-                                    # Check Right, then Down
-                                    val = np.nan
-                                    if c + 1 < len(df.columns): val = self.clean_value(df.iloc[r, c+1])
-                                    if np.isnan(val) and r + 1 < len(df): val = self.clean_value(df.iloc[r+1, c])
-                                    
-                                    if not np.isnan(val): row_data[std_name] = val
-                
+                                if any(k in cell_str for k in keywords) and std_name not in summary_params:
+                                    if c + 1 < len(df.columns):
+                                        val = self.clean_value(df.iloc[r, c+1])
+                                        if not np.isnan(val): summary_params[std_name] = val
+
+                # If we found repeated data points, calculate the mean for Ra
+                if len(data_points) >= 1:
+                    summary_params['Ra_mean'] = np.mean(data_points)
+                    summary_params['n_samples'] = len(data_points)
+                    summary_params['std_err'] = stats.sem(data_points)
+                    summary_params['raw_data'] = data_points
+                else:
+                    summary_params['n_samples'] = 1 # Single point from summary
+
+                row_data = {**meta, **summary_params}
                 combined_rows.append(row_data)
             except Exception as e:
                 st.error(f"Error in {file.name}: {e}")
         return pd.DataFrame(combined_rows)
 
 # ==========================================
-# 2. UI & ANALYSIS ENGINE
+# 2. ADVANCED STATISTICAL ENGINE
 # ==========================================
-st.set_page_config(page_title="Roughness Sci-Lab", layout="wide")
-st.title("🔬 Surface Roughness Scientific Analyzer")
+def run_comparative_stats(df, param, group_col):
+    results = {}
+    groups = df[group_col].unique()
+    
+    # Check Sample Size Quality (n >= 9)
+    quality_check = df.groupby(group_col)['n_samples'].sum()
+    results['quality'] = quality_check
+    
+    # 1. ANOVA (Between multiple conditions)
+    if len(groups) > 1:
+        data_groups = [df[df[group_col] == g][param].dropna() for g in groups]
+        f_stat, p_val = stats.f_oneway(*data_groups)
+        results['anova_p'] = p_val
+        
+    return results
 
-st.sidebar.header("1. Data Upload")
-uploaded_files = st.sidebar.file_uploader("Upload Excel Files", accept_multiple_files=True, type=['xlsx'])
+# ==========================================
+# 3. UI LAYOUT
+# ==========================================
+st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
+st.title("🔬 Advanced Roughness Quality Analyzer")
+
+st.sidebar.header("1. Upload Samples")
+uploaded_files = st.sidebar.file_uploader("Upload .xlsx (Bulk)", accept_multiple_files=True, type=['xlsx'])
 
 if uploaded_files:
-    mat_id = st.sidebar.text_input("Material/Sample ID", "Sample_01")
-    cond = st.sidebar.selectbox("Ageing Condition", ["Control", "Oven", "UV", "Humidity", "Other"])
-    day = st.sidebar.number_input("Ageing Day", min_value=0, step=1)
-
-    if st.sidebar.button("Run Batch Analysis", type="primary"):
+    # Metadata for comparison
+    mat_type = st.sidebar.text_input("Sample ID / Material", "Polymer_A")
+    condition = st.sidebar.selectbox("Ageing Environment", ["Control", "Oven", "UV", "Humidity"])
+    
+    if st.sidebar.button("Run Scientific Analysis"):
         loader = RoughnessLoader()
-        metas = [{"File": f.name, "Material": mat_id, "Condition": cond, "Day": day} for f in uploaded_files]
-        st.session_state['master_df'] = loader.process_files(uploaded_files, metas)
+        processed_meta = [{"File": f.name, "Material": mat_type, "Condition": condition} for f in uploaded_files]
+        st.session_state['master_df'] = loader.process_files(uploaded_files, processed_meta)
 
 if 'master_df' in st.session_state:
     df = st.session_state['master_df']
-    
-    t1, t2, t3 = st.tabs(["📊 Data Quality (n≥9)", "📈 Statistics", "📉 Visuals"])
+    tab1, tab2, tab3 = st.tabs(["📋 Data Quality", "📊 Statistical Comparison", "📉 Distributions"])
 
-    with t1:
-        st.subheader("Scientific Replicate Verification")
-        if not df.empty:
-            # Color logic for sample size quality
-            def color_quality(val):
-                return 'color: red; font-weight: bold' if val < 9 else 'color: green'
-            
-            # Select valid columns for display
-            display_cols = [c for c in ['File', 'Day', 'n_samples', 'Ra_mean', 'std_err', 'Ra', 'Rz'] if c in df.columns]
-            st.dataframe(df[display_cols].style.applymap(color_quality, subset=['n_samples']), use_container_width=True)
-            st.info("💡 Red 'n_samples' indicates fewer than 9 measurements (Scientific threshold).")
-        else:
-            st.warning("No data extracted. Check your file headers.")
+    with tab1:
+        st.subheader("Sample Replicates & Quality Check")
+        # Highlight rows where n < 9
+        def highlight_low_n(s):
+            return ['background-color: #ffcccc' if v < 9 else '' for v in s]
+        
+        display_df = df[['File', 'Condition', 'Ra_mean', 'n_samples', 'std_err']]
+        st.dataframe(display_df.style.apply(highlight_low_n, subset=['n_samples']), use_container_width=True)
+        st.caption("Rows in red have fewer than the recommended 9 data points.")
 
-    with t2:
-        st.subheader("Comparative Statistics")
-        params = [p for p in ["Ra_mean", "Ra", "Rq", "Rz", "Rt"] if p in df.columns]
-        if params:
-            sel_p = st.selectbox("Parameter", params)
-            group = st.radio("Group By", ["Condition", "Day", "Material"])
-            
-            if len(df[group].unique()) > 1:
-                grps = [df[df[group] == g][sel_p].dropna() for g in df[group].unique()]
-                if all(len(g) > 0 for g in grps):
-                    f, p = stats.f_oneway(*grps)
-                    st.metric("ANOVA p-value", f"{p:.4f}")
-                    if p < 0.05: st.success("Significant difference detected between groups.")
-        else:
-            st.error("No numeric parameters found for analysis.")
+    with tab2:
+        st.subheader("Comparing Conditions")
+        param_to_test = st.selectbox("Parameter for Comparison", ["Ra_mean", "Rz", "Rq"])
+        compare_by = st.radio("Compare across:", ["Condition", "Material"])
+        
+        stats_res = run_comparative_stats(df, param_to_test, compare_by)
+        
+        col1, col2 = st.columns(2)
+        if 'anova_p' in stats_res:
+            col1.metric("ANOVA p-value", f"{stats_res['anova_p']:.4f}")
+            if stats_res['anova_p'] < 0.05:
+                col1.success("Significant difference between conditions detected.")
+            else:
+                col1.info("No significant variation found between conditions.")
 
-    with t3:
-        if 'sel_p' in locals():
-            st.subheader(f"Distribution of {sel_p}")
-            fig = px.box(df, x=group, y=sel_p, color="Condition", points="all", notched=True)
-            st.plotly_chart(fig, use_container_width=True)
+    with tab3:
+        st.subheader("Inter-Sample Variance")
+        fig = px.box(df, x=compare_by, y=param_to_test, color="Condition",
+                     points="all", notched=True, title=f"Comparison of {param_to_test}")
+        st.plotly_chart(fig, use_container_width=True)
