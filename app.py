@@ -107,37 +107,36 @@ with st.sidebar:
 df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
+# Shared Layout Settings for Publication Quality
+SHARED_LAYOUT = dict(
+    template="simple_white",
+    height=800, # Fixed Plot Size
+    font=dict(family="Arial", size=14, color="black"),
+    margin=dict(l=80, r=40, t=40, b=80),
+    xaxis=dict(
+        mirror=True, ticks='outside', showline=True, 
+        linecolor='black', linewidth=2.5, title_font=dict(size=16)
+    ),
+    yaxis=dict(
+        mirror=True, ticks='outside', showline=True, 
+        linecolor='black', linewidth=2.5, title_font=dict(size=16),
+        autorange=True
+    ),
+    legend=dict(bordercolor="black", borderwidth=1)
+)
+
 if not df.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Batch Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
-    with tabs[0]:
-        st.dataframe(df, use_container_width=True)
-
-    with tabs[1]:
-        st.subheader("Inter-Sample Comparison")
-        params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
-        p_sel = st.selectbox("Select Parameter", params)
-        plot_df = df.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-        plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
-        
-        fig_trend = px.line(plot_df, x="Sample", y="mean", error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), markers=True, template="simple_white")
-        fig_trend.update_layout(
-            xaxis_title="<b>Sample ID</b>",
-            yaxis_title=f"<b>Mean {p_sel} (µm)</b>",
-            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
-            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2)
-        )
-        st.plotly_chart(fig_trend, use_container_width=True)
-
-    # --- UPDATED TAB 2 (MATCHED TO TAB 3 STYLE) ---
     with tabs[2]:
-        st.subheader("Batch Replicate Inspection (Real Local Ticks)")
+        st.subheader("Batch Replicate Inspection (Standard Style)")
         batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
         batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
-        offset_rep = st.slider("Replicate Offset (µm)", 1, 50, 10)
+        offset_rep = st.slider("Vertical Offset (µm)", 1, 50, 10, key="rep_off")
         
         fig_rep = go.Figure()
         tick_vals, tick_text = [], []
+        
         for i, f in enumerate(batch_files):
             if f in profiles:
                 y_shift = i * offset_rep
@@ -145,28 +144,17 @@ if not df.empty:
                 for t in [-5, 0, 5]:
                     tick_vals.append(t + y_shift)
                     tick_text.append(str(t))
-
+        
+        fig_rep.update_layout(**SHARED_LAYOUT)
         fig_rep.update_layout(
-            template="simple_white",
-            height=700,
-            font=dict(family="Arial", size=14, color="black"),
-            xaxis_title="<b>Travel Length (mm)</b>", 
+            xaxis_title="<b>Travel Length (mm)</b>",
             yaxis_title="<b>Amplitude (µm)</b>",
-            yaxis=dict(
-                tickmode='array', tickvals=tick_vals, ticktext=tick_text, 
-                mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, 
-                title_font=dict(size=16), autorange=True
-            ),
-            xaxis=dict(
-                mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, 
-                title_font=dict(size=16)
-            ),
-            margin=dict(l=80, r=40, t=40, b=80)
+            yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text)
         )
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Profile Comparison (Real Local Ticks)")
+        st.subheader("Representative Profile Comparison (Standard Style)")
         offset_global = st.slider("Group Vertical Offset (µm)", 1, 100, 25, key="glob_off")
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -181,19 +169,16 @@ if not df.empty:
                 p_data = profiles[closest_file]
                 y_shift = i * offset_global
                 name = st.session_state['legend_map'].get(sample, sample)
-                fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, line=dict(width=2.5)))
+                fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, line=dict(width=2)))
                 for t in [-10, 0, 10]:
-                    t_vals.append(t + y_shift); t_text.append(str(t))
+                    t_vals.append(t + y_shift)
+                    t_text.append(str(t))
         
+        fig_glob.update_layout(**SHARED_LAYOUT)
         fig_glob.update_layout(
-            template="simple_white",
-            font=dict(family="Arial", size=14, color="black"),
             xaxis_title="<b>Travel Length (mm)</b>",
             yaxis_title="<b>Amplitude (µm)</b>",
-            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16)),
-            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16), autorange=True),
-            legend=dict(bordercolor="black", borderwidth=1),
-            margin=dict(l=80, r=40, t=40, b=80)
+            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text)
         )
         st.plotly_chart(fig_glob, use_container_width=True)
 
@@ -206,6 +191,6 @@ if not df.empty:
             temp.columns = [f"{header}_L", f"{header}_Amp"]
             wide_list.append(temp)
         if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_export.csv")
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
 else:
-    st.info("👋 Upload your sample batches to begin.")
+    st.info("👋 Upload sample batches in the sidebar to begin.")
