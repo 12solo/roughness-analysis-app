@@ -168,7 +168,7 @@ if not df_master.empty:
                 y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
                 yshift=20, 
                 text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
-                showarrow=False, align="right", xanchor="right", yanchor="bottom",
+                showarrow=False, align="left", xanchor="right", yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
                 bgcolor="rgba(255,255,255,0.7)"
             )
