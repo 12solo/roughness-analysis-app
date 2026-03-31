@@ -114,13 +114,19 @@ if not df.empty:
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
+        st.subheader("Inter-Sample Comparison")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
         p_sel = st.selectbox("Select Parameter", params)
         plot_df = df.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
         plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
+        
         fig_trend = px.line(plot_df, x="Sample", y="mean", error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), markers=True, template="simple_white")
-        fig_trend.update_layout(xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
-                                yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2))
+        fig_trend.update_layout(
+            xaxis_title="<b>Sample ID</b>",
+            yaxis_title=f"<b>Mean {p_sel} (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2)
+        )
         st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[3]:
@@ -134,9 +140,13 @@ if not df.empty:
             if f in profiles:
                 fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], y=profiles[f]['Amplitude_um_Norm'] + (i * offset_rep), mode='lines', name=f"Rep {i+1}"))
         
-        fig_rep.update_layout(template="simple_white",
-                            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
-                            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2, autorange=True))
+        fig_rep.update_layout(
+            template="simple_white",
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Amplitude + Offset (µm)</b>",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2, autorange=True)
+        )
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[4]:
@@ -146,36 +156,33 @@ if not df.empty:
         
         unique_samples = sorted(df['Sample'].unique())
         for i, sample in enumerate(unique_samples):
-            # 1. Find the Mean Ra for this batch
             sample_data = df[df['Sample'] == sample]
             mean_ra = sample_data['Ra'].mean()
-            
-            # 2. Find the actual file closest to that mean
             closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
             
             if closest_file in profiles:
                 p_data = profiles[closest_file]
                 name = st.session_state['legend_map'].get(sample, sample)
-                
                 fig_glob.add_trace(go.Scatter(
                     x=p_data['Length_mm'], 
                     y=p_data['Amplitude_um_Norm'] + (i * offset_global), 
                     mode='lines', 
-                    name=f"{name} (Rep: {closest_file})", 
+                    name=name, 
                     line=dict(width=2)
                 ))
         
-        # BORDER ADJUSTMENT: Explicitly mirroring the lines for a quality box
         fig_glob.update_layout(
             template="simple_white",
             font=dict(family="Arial", size=14, color="black"),
+            xaxis_title="<b>Travel Length (mm)</b>",
+            yaxis_title="<b>Amplitude + Vertical Offset (µm)</b>",
             xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16)),
             yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16), autorange=True),
             legend=dict(bordercolor="black", borderwidth=1),
             margin=dict(l=80, r=40, t=40, b=80)
         )
         st.plotly_chart(fig_glob, use_container_width=True)
-        st.info("💡 Instead of a mathematical average, the plot above displays the actual test profile from each batch that is statistically closest to the group's mean Ra.")
+        st.info("💡 Representative profiles: The plots show actual measurements closest to each batch's mean Ra.")
 
     with tabs[5]:
         wide_list = []
