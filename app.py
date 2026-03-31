@@ -73,7 +73,7 @@ st.title("🔬 Scientific Roughness Analyzer")
 with st.sidebar:
     st.header("1. Data Input")
     with st.form("input_form", clear_on_submit=True):
-        s_name = st.text_input("Sample/Batch ID", "Sample A")
+        s_name = st.text_input("Sample ID", "Sample A")
         s_files = st.file_uploader("Upload Replicate Files (.xlsx)", accept_multiple_files=True)
         submit = st.form_submit_button("Add Sample Batch")
 
@@ -145,11 +145,12 @@ if not df_master.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Stack (Left-Aligned, Transparent)")
-        offset_global = st.slider("Group Offset (µm)", 1, 250, 60)
+        st.subheader("Representative Stack (Inline Legend Layout)")
+        offset_global = st.slider("Group Offset (µm)", 1, 300, 80)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
         unique_samples = sorted(df_master['Sample'].unique())
+        
         for i, sample in enumerate(unique_samples):
             sample_data = df_master[df_master['Sample'] == sample]
             mean_ra = sample_data['Ra'].mean()
@@ -160,34 +161,44 @@ if not df_master.empty:
             current_profile = prof_dict[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
             
-            fig_glob.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
+            fig_glob.add_trace(go.Scatter(
+                x=current_profile['Length_mm'], 
+                y=current_profile['Amplitude_um_Norm'] + y_shift, 
+                mode='lines', 
+                name=name, 
+                showlegend=False,
+                line=dict(width=2)
+            ))
             
-            # UPDATED: Legend shifted to the left corner and removed background
+            # UPDATED: Row-based Legend (Name and Ra in front of each other)
+            # Positioned at the left corner, pushed up by yshift
+            inline_label = f"<b>{name}: <i>R<sub>a</sub></i> = {mean_ra:.3f} ± {std_ra:.3f} µm</b>"
+            
             fig_glob.add_annotation(
                 x=current_profile['Length_mm'].min(), 
                 y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
-                yshift=20, 
-                text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
-                showarrow=False, align="left", xanchor="left", yanchor="bottom",
+                yshift=20, # Vertical distance above peak
+                text=inline_label, 
+                showarrow=False, 
+                align="left", 
+                xanchor="left", 
+                yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor=None # Removed white background
+                bgcolor=None # Transparent per previous request
             )
+            
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
         
-        fig_glob.update_layout(template="simple_white", height=850, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE))
+        fig_glob.update_layout(
+            template="simple_white", 
+            height=850, 
+            xaxis_title="<b>Travel Length (mm)</b>", 
+            yaxis_title="<b>Amplitude (µm)</b>", 
+            xaxis=AXIS_STYLE, 
+            yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE),
+            margin=dict(l=100, r=40, t=80, b=100) # Increased top margin for labels
+        )
         st.plotly_chart(fig_glob, use_container_width=True)
-
-    with tabs[4]:
-        st.subheader("Export Dataset")
-        wide_list = []
-        for fname, p_data in prof_dict.items():
-            meta = df_master[df_master['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_export.csv")
 else:
     st.info("👋 Use the sidebar to upload your sample replicates.")
