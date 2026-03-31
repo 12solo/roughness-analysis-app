@@ -38,7 +38,6 @@ class RoughnessLoader:
                 row_summary = meta_template.copy()
                 row_summary['File'] = file.name
                 
-                # Pass 1: Summary Stats extraction
                 for sheet in xl.sheet_names:
                     df_sheet = xl.parse(sheet, header=None)
                     for r in range(min(len(df_sheet), 100)):
@@ -52,7 +51,6 @@ class RoughnessLoader:
                                     if not np.isnan(val): row_summary[std_key] = val
                 combined_summary.append(row_summary)
 
-                # Pass 2: Profile Normalization
                 data_sheet = next((s for s in xl.sheet_names if "DATA" in s.upper()), None)
                 if data_sheet:
                     df_p = pd.read_excel(file, sheet_name=data_sheet, usecols=[4, 5])
@@ -60,9 +58,10 @@ class RoughnessLoader:
                     df_p = df_p.apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
                     
                     if not df_p.empty:
-                        # Scientific Normalization: Mean-centering
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
-                        df_p['Sample_Label'] = f"{meta_template['Sample']} ({meta_template['Condition']})"
+                        df_p['Sample'] = meta_template['Sample']
+                        df_p['Condition'] = meta_template['Condition']
+                        df_p['Day'] = meta_template['Day']
                         profile_map[file.name] = df_p
 
             except Exception as e:
@@ -93,7 +92,6 @@ with st.sidebar:
         st.session_state['profile_dict'].update(new_prof)
         st.success(f"Added {len(s_files)} replicates for {s_name}")
 
-    st.markdown("---")
     if st.button("Reset Entire Study", type="primary"):
         st.session_state['master_df'] = pd.DataFrame()
         st.session_state['profile_dict'] = {}
@@ -106,7 +104,7 @@ df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📋 Dataset", "📈 Statistics", "📉 Comparative Trends", "🌊 Individual Ra Profile", "🎨 Stacked Comparison", "💾 Export"])
+    tabs = st.tabs(["📋 Dataset", "📈 Stats", "📉 Trends", "🌊 Individual Batch Profiles", "🎨 Master Stacked Plot", "💾 Export"])
 
     with tabs[0]:
         st.dataframe(df, use_container_width=True)
@@ -114,91 +112,80 @@ if not df.empty:
     with tabs[1]:
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
         if params:
-            p_sel = st.selectbox("Parameter for Stats", params)
+            p_sel = st.selectbox("Select Parameter", params)
             stats_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
             stats_df['CV%'] = (stats_df['std'] / stats_df['mean']) * 100
-            st.write("### Summary Statistics Table")
             st.dataframe(stats_df.style.format(precision=4), use_container_width=True)
 
     with tabs[2]:
         if 'p_sel' in locals():
             plot_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
             plot_df['CI95'] = 1.96 * (plot_df['std'] / np.sqrt(plot_df['count']))
-            fig_trend = px.line(plot_df, x="Sample", y="mean", color="Condition", error_y="CI95", markers=True, 
-                                title=f"Comparison of {p_sel} Across Samples")
+            fig_trend = px.line(plot_df, x="Sample", y="mean", color="Condition", error_y="CI95", markers=True)
             st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Individual Normalized Ra Profile")
+        st.subheader("Batch Replicate Inspection")
         if profiles:
-            sel_f = st.selectbox("Select Test File to View Profile:", list(profiles.keys()))
-            p_data = profiles[sel_f]
-            if not p_data.empty:
-                fig_indiv = go.Figure()
-                fig_indiv.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'], mode='lines', name='Profile'))
-                fig_indiv.add_hline(y=0, line_dash="dash", line_color="red")
-                fig_indiv.update_layout(xaxis_title="Length (mm)", yaxis_title="Amplitude (µm)", template="simple_white")
-                st.plotly_chart(fig_indiv, use_container_width=True)
-
-    with tabs[4]:
-        st.subheader("Stacked Profile Plot (Scientific Visualization)")
-        if profiles:
-            unique_samples = df['Sample'].unique()
-            offset_step = st.slider("Vertical Offset (µm)", 1, 100, 20)
+            # Step 1: Select the Group (Sample/Batch)
+            unique_batches = df[['Sample', 'Condition', 'Day']].drop_duplicates()
+            batch_labels = [f"{r['Sample']} - {r['Condition']} (Day {r['Day']})" for _, r in unique_batches.iterrows()]
+            selected_label = st.selectbox("Select Batch to View Replicate Stack:", batch_labels)
             
-            fig_stack = go.Figure()
+            # Filter files belonging to that selected batch
+            idx = batch_labels.index(selected_label)
+            target = unique_batches.iloc[idx]
+            batch_files = df[(df['Sample'] == target['Sample']) & 
+                            (df['Condition'] == target['Condition']) & 
+                            (df['Day'] == target['Day'])]['File'].tolist()
             
-            # CASE A: MULTIPLE BATCHES -> Plot Mean Profile of each Sample
-            if len(unique_samples) > 1:
-                st.info("Multiple samples detected: Plotting the **Mean Profile** of each batch.")
-                for i, sample in enumerate(sorted(unique_samples)):
-                    # Get all files belonging to this sample
-                    sample_files = df[df['Sample'] == sample]['File'].tolist()
-                    sample_profiles = [profiles[f] for f in sample_files if f in profiles]
-                    
-                    if sample_profiles:
-                        # Combine and average profiles (grouped by Length)
-                        combined = pd.concat(sample_profiles)
-                        # Round Length to handle small floating point differences in sampling
-                        combined['Length_mm_grp'] = combined['Length_mm'].round(6)
-                        mean_profile = combined.groupby('Length_mm_grp')['Amplitude_um_Norm'].mean().reset_index()
-                        
-                        y_offset = i * offset_step
-                        fig_stack.add_trace(go.Scatter(
-                            x=mean_profile['Length_mm_grp'],
-                            y=mean_profile['Amplitude_um_Norm'] + y_offset,
-                            mode='lines',
-                            name=f"Mean: {sample}",
-                            line=dict(width=2)
-                        ))
+            # Step 2: Plot Stacked replicates for ONLY that batch
+            offset_val = st.slider("Vertical Offset for Replicates (µm)", 1, 50, 10, key="batch_offset")
+            fig_batch = go.Figure()
             
-            # CASE B: ONLY ONE BATCH -> Plot All Tests for that Sample
-            else:
-                st.info("Single batch detected: Plotting **all individual tests** stacked.")
-                sorted_files = sorted(profiles.keys())
-                for i, fname in enumerate(sorted_files):
+            for i, fname in enumerate(sorted(batch_files)):
+                if fname in profiles:
                     p_data = profiles[fname]
-                    y_offset = i * offset_step
-                    fig_stack.add_trace(go.Scatter(
+                    fig_batch.add_trace(go.Scatter(
                         x=p_data['Length_mm'],
-                        y=p_data['Amplitude_um_Norm'] + y_offset,
+                        y=p_data['Amplitude_um_Norm'] + (i * offset_val),
                         mode='lines',
-                        name=fname,
+                        name=f"Rep {i+1}: {fname}",
                         line=dict(width=1)
                     ))
             
-            fig_stack.update_layout(
-                template="simple_white",
-                xaxis_title="<b>Travel Length (mm)</b>",
-                yaxis_title="<b>Amplitude + Vertical Offset (µm)</b>",
-                height=700,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_stack, use_container_width=True)
-            st.caption("Profiles are mean-centered (normalized) and then offset vertically for clarity.")
+            fig_batch.update_layout(template="simple_white", xaxis_title="Length (mm)", yaxis_title="Amplitude + Offset (µm)", height=600)
+            st.plotly_chart(fig_batch, use_container_width=True)
+            st.info(f"Showing all {len(batch_files)} replicate profiles for {target['Sample']}.")
+
+    with tabs[4]:
+        st.subheader("Global Comparison (Mean Profiles Only)")
+        if profiles:
+            global_offset = st.slider("Vertical Offset (µm)", 1, 100, 25, key="global_offset")
+            fig_global = go.Figure()
+            
+            unique_samples = df['Sample'].unique()
+            for i, sample in enumerate(sorted(unique_samples)):
+                sample_files = df[df['Sample'] == sample]['File'].tolist()
+                relevant_profs = [profiles[f] for f in sample_files if f in profiles]
+                
+                if relevant_profs:
+                    combined = pd.concat(relevant_profs)
+                    combined['L_grp'] = combined['Length_mm'].round(5)
+                    mean_prof = combined.groupby('L_grp')['Amplitude_um_Norm'].mean().reset_index()
+                    
+                    fig_global.add_trace(go.Scatter(
+                        x=mean_prof['L_grp'],
+                        y=mean_prof['Amplitude_um_Norm'] + (i * global_offset),
+                        mode='lines',
+                        name=f"Mean Profile: {sample}",
+                        line=dict(width=2)
+                    ))
+            
+            fig_global.update_layout(template="simple_white", xaxis_title="Length (mm)", yaxis_title="Amplitude + Offset (µm)", height=700)
+            st.plotly_chart(fig_global, use_container_width=True)
 
     with tabs[5]:
-        st.subheader("Bulk Export (Columnar Wide Format)")
         wide_list = []
         for fname, p_data in profiles.items():
             meta = df[df['File'] == fname].iloc[0]
@@ -207,7 +194,6 @@ if not df.empty:
             temp.columns = [f"{header}_Length", f"{header}_Amplitude"]
             wide_list.append(temp)
         if wide_list:
-            final_wide = pd.concat(wide_list, axis=1)
-            st.download_button("Download CSV", final_wide.to_csv(index=False).encode('utf-8'), "scientific_profiles_wide.csv")
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "scientific_profiles.csv")
 else:
-    st.info("👋 Use the sidebar to upload your sample replicates. The app will automatically stack individual tests for single batches or mean profiles for comparative studies.")
+    st.info("👋 Upload your first sample batch to begin.")
