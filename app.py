@@ -31,8 +31,51 @@ class RoughnessLoader:
         combined_data = []
         for file, meta in zip(uploaded_files, metadata_list):
             try:
-                # Read the first sheet of the Excel file
-                df_raw = pd.read_excel(file)
+                # 1. Try to load the 'Certificate' sheet specifically
+                try:
+                    df_raw = pd.read_excel(file, sheet_name='Certificate')
+                except:
+                    # 2. If 'Certificate' doesn't exist, try the first sheet
+                    df_raw = pd.read_excel(file, sheet_name=0)
+                
+                # Clean column names
+                cols = [str(c).lower().strip() for c in df_raw.columns]
+                
+                row_data = meta.copy()
+                found_params = False
+
+                for standard_name, keywords in self.targets.items():
+                    for i, col_name in enumerate(cols):
+                        if any(k in col_name for k in keywords):
+                            # In Certificate sheets, the value is often in the first row
+                            raw_val = df_raw.iloc[0, i]
+                            row_data[standard_name] = self.clean_value(raw_val)
+                            found_params = True
+                            break
+                
+                if found_params:
+                    combined_data.append(row_data)
+                else:
+                    # 3. Last Resort: Search EVERY sheet in the file for the keywords
+                    xl = pd.ExcelFile(file)
+                    for sheet in xl.sheet_names:
+                        df_sheet = xl.parse(sheet)
+                        sheet_cols = [str(c).lower().strip() for c in df_sheet.columns]
+                        for standard_name, keywords in self.targets.items():
+                            for i, col_name in enumerate(sheet_cols):
+                                if any(k in col_name for k in keywords):
+                                    row_data[standard_name] = self.clean_value(df_sheet.iloc[0, i])
+                                    found_params = True
+                    
+                    if found_params:
+                        combined_data.append(row_data)
+                    else:
+                        st.warning(f"⚠️ '{file.name}' loaded, but couldn't find Ra/Rq/Rz/Rt in any sheet.")
+            
+            except Exception as e:
+                st.error(f"❌ Error in {file.name}: {e}")
+                
+        return pd.DataFrame(combined_data)
                 
                 # Clean column names for searching (lowercase, no spaces)
                 cols = [str(c).lower().strip() for c in df_raw.columns]
