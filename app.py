@@ -39,6 +39,7 @@ class RoughnessLoader:
                 row_summary = meta_template.copy()
                 row_summary['File'] = file.name
                 
+                # Pass 1: Summary Stats
                 for sheet in xl.sheet_names:
                     df_sheet = xl.parse(sheet, header=None)
                     for r in range(min(len(df_sheet), 100)):
@@ -52,7 +53,7 @@ class RoughnessLoader:
                                     if not np.isnan(val): row_summary[std_key] = val
                 combined_summary.append(row_summary)
 
-                # Profile Extraction & Normalization
+                # Pass 2: Profile Normalization
                 data_sheet = next((s for s in xl.sheet_names if "DATA" in s.upper()), None)
                 if data_sheet:
                     df_p = pd.read_excel(file, sheet_name=data_sheet, usecols=[4, 5])
@@ -60,9 +61,7 @@ class RoughnessLoader:
                     df_p = df_p.apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
                     
                     if not df_p.empty:
-                        # Scientific Normalization
                         df_p['Amplitude_um_Norm'] = df_p['Amplitude_um'] - df_p['Amplitude_um'].mean()
-                        # Tag with metadata for overlay plotting
                         df_p['Sample_Label'] = f"{meta_template['Sample']} ({meta_template['Condition']})"
                         profile_map[file.name] = df_p
 
@@ -93,6 +92,12 @@ with st.sidebar:
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
 
+    # RESTORED RESET FUNCTION
+    if st.button("Reset Entire Study", type="secondary"):
+        st.session_state['master_df'] = pd.DataFrame()
+        st.session_state['profile_dict'] = {}
+        st.rerun()
+
 # ==========================================
 # 4. DASHBOARD
 # ==========================================
@@ -100,13 +105,12 @@ df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
 if not df.empty:
-    tabs = st.tabs(["📋 Dataset", "📈 Stats", "📉 Comparative Trends", "🌊 Ra Profile Plot", "🎭 Overlay Plot", "💾 Export"])
+    tabs = st.tabs(["📋 Dataset", "📈 Stats", "📉 Comparative Trends", "🌊 Ra Profile", "🎨 Stacked Profiles", "💾 Export"])
 
     with tabs[0]:
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
-        # Statistics logic (Mean, SD, CV%)
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
         p_sel = st.selectbox("Select Parameter", params)
         stats_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
@@ -114,12 +118,10 @@ if not df.empty:
         st.dataframe(stats_df.style.format(precision=4), use_container_width=True)
 
     with tabs[2]:
-        # Trend comparison with 95% CI
         plot_df = df.groupby(["Sample", "Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
         plot_df['CI95'] = 1.96 * (plot_df['std'] / np.sqrt(plot_df['count']))
         fig_trend = px.line(plot_df, x="Sample", y="mean", color="Condition", error_y="CI95", markers=True)
         st.plotly_chart(fig_trend, use_container_width=True)
-        
 
     with tabs[3]:
         st.subheader("Individual Normalized Profile")
@@ -127,46 +129,46 @@ if not df.empty:
             sel_f = st.selectbox("View Profile for:", list(profiles.keys()))
             p_data = profiles[sel_f]
             if not p_data.empty:
-                fig_prof = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', title=f"Centered Profile: {sel_f}")
+                fig_prof = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', labels={'Amplitude_um_Norm': 'Amplitude (µm)'})
                 fig_prof.add_hline(y=0, line_dash="dash", line_color="red")
                 st.plotly_chart(fig_prof, use_container_width=True)
-                
 
     with tabs[4]:
-        st.subheader("Scientific Overlay Plot (Journal Ready)")
+        st.subheader("Stacked Profile Plot (Scientific Comparison)")
         if profiles:
-            # Combine profiles for overlay
-            overlay_df = pd.concat(profiles.values(), ignore_index=True)
+            offset_step = st.slider("Vertical Offset (µm)", min_value=1, max_value=50, value=10)
+            fig_stack = go.Figure()
             
-            # Create a high-quality journal-ready plot
-            fig_ov = go.Figure()
+            # Sort keys to ensure consistent stacking order
+            sorted_files = sorted(profiles.keys())
             
-            # Color palette for distinct samples
-            colors = px.colors.qualitative.Bold
-            
-            for i, (label, group) in enumerate(overlay_df.groupby("Sample_Label")):
-                fig_ov.add_trace(go.Scatter(
-                    x=group['Length_mm'], 
-                    y=group['Amplitude_um_Norm'],
+            for i, fname in enumerate(sorted_files):
+                p_data = profiles[fname]
+                if p_data.empty: continue
+                
+                # Calculate vertical shift
+                y_offset = i * offset_step
+                label = f"{p_data['Sample_Label'].iloc[0]} - {fname}"
+                
+                fig_stack.add_trace(go.Scatter(
+                    x=p_data['Length_mm'],
+                    y=p_data['Amplitude_um_Norm'] + y_offset,
                     mode='lines',
                     name=label,
-                    line=dict(width=1, color=colors[i % len(colors)]),
-                    opacity=0.8
+                    line=dict(width=1)
                 ))
             
-            fig_ov.update_layout(
+            fig_stack.update_layout(
                 template="simple_white",
                 xaxis_title="<b>Travel Length (mm)</b>",
-                yaxis_title="<b>Amplitude (µm)</b>",
-                legend_title="Samples",
-                font=dict(family="Arial", size=12, color="black"),
-                hovermode="x unified"
+                yaxis_title="<b>Normalized Amplitude + Offset (µm)</b>",
+                height=700,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig_ov, use_container_width=True)
-            st.info("💡 **Publication Tip:** This plot uses 'Simple White' template and Arial fonts, which are preferred by most scientific journals (Elsevier, Springer, etc.).")
+            st.plotly_chart(fig_stack, use_container_width=True)
+            st.info("💡 Adjust the 'Vertical Offset' slider if profiles are overlapping too much.")
 
     with tabs[5]:
-        # Wide-Format Export logic
         wide_list = []
         for fname, p_data in profiles.items():
             meta = df[df['File'] == fname].iloc[0]
@@ -175,6 +177,6 @@ if not df.empty:
             temp.columns = [f"{header}_Length", f"{header}_Amplitude"]
             wide_list.append(temp)
         if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "wide_profiles.csv")
+            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "stacked_profiles.csv")
 else:
-    st.info("👋 Upload data for Sample A, B, etc. in the sidebar to begin.")
+    st.info("👋 Upload data for your sample batches to begin.")
