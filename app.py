@@ -1,5 +1,5 @@
 import streamlit as st
-import pd
+import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
@@ -83,11 +83,12 @@ with st.sidebar:
         new_sum, new_prof = loader.process_files(s_files, meta)
         st.session_state['master_df'] = pd.concat([st.session_state['master_df'], new_sum], ignore_index=True)
         st.session_state['profile_dict'].update(new_prof)
-        st.success(f"Added {len(s_files)} replicates for {s_name}")
+        st.success(f"Added replicates for {s_name}")
 
     if not st.session_state['master_df'].empty:
         st.header("2. Legend Customization")
-        for s in sorted(st.session_state['master_df']['Sample'].unique()):
+        unique_samples = sorted(st.session_state['master_df']['Sample'].unique())
+        for s in unique_samples:
             if s not in st.session_state['legend_map']:
                 st.session_state['legend_map'][s] = s
             st.session_state['legend_map'][s] = st.text_input(f"Rename '{s}':", st.session_state['legend_map'][s])
@@ -125,12 +126,17 @@ if not df_master.empty:
         if params:
             p_sel = st.selectbox("Select Parameter", params)
             plot_df = df_master.groupby(["Sample"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-            plot_df['Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
+            plot_df['Display_Sample'] = plot_df['Sample'].map(st.session_state['legend_map'])
             
-            fig_trend = px.line(plot_df, x="Sample", y="mean", 
+            fig_trend = px.line(plot_df, x="Display_Sample", y="mean", 
                                 error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), 
                                 markers=True, template="simple_white")
-            fig_trend.update_layout(xaxis_title="<b>Sample ID</b>", yaxis_title=f"<b>Mean {p_sel} (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
+            fig_trend.update_layout(
+                xaxis_title="<b>Sample ID</b>", 
+                yaxis_title=f"<b>Mean {p_sel} (µm)</b>", 
+                xaxis=AXIS_STYLE, yaxis=AXIS_STYLE,
+                font=dict(family="Times New Roman")
+            )
             st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[2]:
@@ -146,7 +152,6 @@ if not df_master.empty:
             clean_name = os.path.splitext(f)[0]
             fig_rep.add_trace(go.Scatter(x=prof_dict[f]['Length_mm'], y=prof_dict[f]['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
             
-            # NO BORDER ON ANNOTATION, WHITE BG FOR CLARITY
             fig_rep.add_annotation(
                 x=prof_dict[f]['Length_mm'].mean(), 
                 y=y_shift + prof_dict[f]['Amplitude_um_Norm'].max() + 3, 
@@ -177,7 +182,6 @@ if not df_master.empty:
             
             fig_glob.add_trace(go.Scatter(x=prof_dict[closest_file]['Length_mm'], y=prof_dict[closest_file]['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
             
-            # NO BORDER ON ANNOTATION, WHITE BG FOR CLARITY
             fig_glob.add_annotation(
                 x=prof_dict[closest_file]['Length_mm'].min(), 
                 y=y_shift + offset_global/3, 
