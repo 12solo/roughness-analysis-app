@@ -1,0 +1,6 @@
+RoughnessApp/
+├── app.py              <-- Save the "Main UI" code here
+├── data_loader.py      <-- Save the "Excel parsing" code here
+├── analysis.py         <-- Save the "Statistical calculations" code here
+├── visualization.py    <-- Save the "Plotly figure generation" code here
+└── requirements.txt    <-- Save the list of libraries here
