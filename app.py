@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from scipy import stats
 import re
 import os
+import io
 
 # ==========================================
 # 1. INITIALIZE SESSION STATE
@@ -115,12 +116,10 @@ AXIS_STYLE = dict(
 if not df_master.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
-    # TABS [0]: Dataset
     with tabs[0]:
         st.subheader("Summary Table")
         st.dataframe(df_master, use_container_width=True)
 
-    # TABS [1]: Trends
     with tabs[1]:
         st.subheader("Inter-Sample Comparison")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df_master.columns]
@@ -140,7 +139,6 @@ if not df_master.empty:
             )
             st.plotly_chart(fig_trend, use_container_width=True)
 
-    # TABS [2]: Replicate Stack
     with tabs[2]:
         st.subheader("Batch Replicate Inspection")
         batch_to_check = st.selectbox("Select Batch to Inspect:", sorted(df_master['Sample'].unique()))
@@ -161,7 +159,6 @@ if not df_master.empty:
                     mode='lines', name=f"Rep {i+1}", showlegend=False
                 ))
                 
-                # Label positioning above peak
                 y_peak = (p_data['Amplitude_um_Norm'] + y_shift).max()
                 fig_rep.add_annotation(
                     x=p_data['Length_mm'].min(), y=y_peak, yshift=10,
@@ -184,12 +181,14 @@ if not df_master.empty:
         )
         st.plotly_chart(fig_rep, use_container_width=True)
 
-    # TABS [3]: Representative Stack (Your code)
     with tabs[3]:
         st.subheader("Representative Stack (Auto-Adjustable [-10, 0, 10] Ticks)")
         offset_global = st.slider("Group Offset (µm)", 1, 400, 100)
+        
         fig_glob = go.Figure()
         t_vals, t_text = [], []
+        representative_data_frames = [] # To store the specific XY data for download
+        
         unique_samples = sorted(df_master['Sample'].unique())
         
         for i, sample in enumerate(unique_samples):
@@ -201,6 +200,11 @@ if not df_master.empty:
             y_shift = i * offset_global
             current_profile = prof_dict[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
+            
+            # Save for download function
+            df_to_save = current_profile[['Length_mm', 'Amplitude_um']].copy()
+            df_to_save.columns = [f"{name}_Length_mm", f"{name}_Amplitude_um"]
+            representative_data_frames.append(df_to_save)
             
             fig_glob.add_trace(go.Scatter(
                 x=current_profile['Length_mm'], 
@@ -239,7 +243,19 @@ if not df_master.empty:
         )
         st.plotly_chart(fig_glob, use_container_width=True)
 
-    # TABS [4]: Export
+        # NEW: Download representative data specifically
+        if representative_data_frames:
+            # Join all representative XY columns side-by-side
+            rep_export_df = pd.concat(representative_data_frames, axis=1)
+            csv_rep = rep_export_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Representative Profile Data (XY)",
+                data=csv_rep,
+                file_name="representative_profiles_data.csv",
+                mime="text/csv",
+                help="Downloads only the profile data for the representative samples shown above."
+            )
+
     with tabs[4]:
         st.subheader("Data Export")
         if not prof_dict:
