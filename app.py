@@ -105,7 +105,6 @@ with st.sidebar:
 df_master = st.session_state['master_df']
 prof_dict = st.session_state['profile_dict']
 
-# JOURNAL STYLE CONFIGURATION
 AXIS_STYLE = dict(
     mirror=True, ticks='outside', showline=True, 
     linecolor='black', linewidth=2.5,
@@ -131,12 +130,7 @@ if not df_master.empty:
             fig_trend = px.line(plot_df, x="Display_Sample", y="mean", 
                                 error_y=1.96*(plot_df['std']/np.sqrt(plot_df['count'])), 
                                 markers=True, template="simple_white")
-            fig_trend.update_layout(
-                xaxis_title="<b>Sample ID</b>", 
-                yaxis_title=f"<b>Mean {p_sel} (µm)</b>", 
-                xaxis=AXIS_STYLE, yaxis=AXIS_STYLE,
-                font=dict(family="Times New Roman")
-            )
+            fig_trend.update_layout(xaxis_title="<b>Sample ID</b>", yaxis_title=f"<b>Mean {p_sel} (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
             st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[2]:
@@ -150,15 +144,19 @@ if not df_master.empty:
         for i, f in enumerate(batch_files):
             y_shift = i * offset_rep
             clean_name = os.path.splitext(f)[0]
-            fig_rep.add_trace(go.Scatter(x=prof_dict[f]['Length_mm'], y=prof_dict[f]['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
+            current_profile = prof_dict[f]
+            fig_rep.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
             
+            # Rep Legend positioning: Above the peak of the current line
+            y_pos = y_shift + current_profile['Amplitude_um_Norm'].max()
             fig_rep.add_annotation(
-                x=prof_dict[f]['Length_mm'].mean(), 
-                y=y_shift + prof_dict[f]['Amplitude_um_Norm'].max() + 3, 
+                x=current_profile['Length_mm'].mean(), 
+                y=y_pos, 
+                yshift=10,
                 text=f"<b>Rep {i+1} ({clean_name})</b>", 
                 showarrow=False, 
                 font=dict(family="Times New Roman", size=14, color="black"),
-                bgcolor="rgba(255,255,255,0.9)", borderwidth=0
+                bgcolor="rgba(255,255,255,0.8)", borderwidth=0
             )
             for t in [-5, 0, 5]:
                 tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
@@ -167,7 +165,7 @@ if not df_master.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Stack")
+        st.subheader("Representative Stack (No Line Overlap)")
         offset_global = st.slider("Group Offset (µm)", 1, 200, 50)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -177,18 +175,23 @@ if not df_master.empty:
             mean_ra = sample_data['Ra'].mean()
             std_ra = sample_data['Ra'].std()
             closest_file = sample_data.iloc[(sample_data['Ra'] - mean_ra).abs().argsort()[:1]]['File'].values[0]
+            
             y_shift = i * offset_global
+            current_profile = prof_dict[closest_file]
             name = st.session_state['legend_map'].get(sample, sample)
             
-            fig_glob.add_trace(go.Scatter(x=prof_dict[closest_file]['Length_mm'], y=prof_dict[closest_file]['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
+            fig_glob.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
             
+            # PLACEMENT LOGIC: Use 'yanchor="bottom"' and 'yshift' to keep label above line peaks
+            y_max = y_shift + current_profile['Amplitude_um_Norm'].max()
             fig_glob.add_annotation(
-                x=prof_dict[closest_file]['Length_mm'].min(), 
-                y=y_shift + offset_global/3, 
+                x=current_profile['Length_mm'].min(), 
+                y=y_max, 
+                yshift=15, # Pushes text 15 pixels above the peak
                 text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
-                showarrow=False, align="left", xanchor="left", 
+                showarrow=False, align="left", xanchor="left", yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor="rgba(255,255,255,0.85)", borderwidth=0
+                bgcolor="rgba(255,255,255,0.9)", borderwidth=0
             )
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
