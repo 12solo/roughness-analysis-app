@@ -68,7 +68,7 @@ class RoughnessLoader:
         return pd.DataFrame(combined_summary), profile_map
 
 # ==========================================
-# 3. UI & SIDEBAR (Legend Customization)
+# 3. UI & SIDEBAR
 # ==========================================
 st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
 st.title("🔬 Scientific Roughness Analyzer")
@@ -122,7 +122,11 @@ if not df.empty:
         plot_df['CI95'] = 1.96 * (plot_df['std'] / np.sqrt(plot_df['count']))
         
         fig_trend = px.line(plot_df, x="Sample", y="mean", error_y="CI95", markers=True, template="simple_white")
-        fig_trend.update_layout(xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'))
+        fig_trend.update_layout(
+            font=dict(family="Arial", size=12, color="black"),
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5)
+        )
         st.plotly_chart(fig_trend, use_container_width=True)
 
     with tabs[2]:
@@ -131,10 +135,14 @@ if not df.empty:
         p_data = profiles[sel_f]
         fig_p = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', template="simple_white")
         fig_p.add_hline(y=0, line_dash="dash", line_color="red")
+        fig_p.update_layout(
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5)
+        )
         st.plotly_chart(fig_p, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Batch Replicate Stack (Check Consistency)")
+        st.subheader("Batch Replicate Stack")
         batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
         batch_files = df[df['Sample'] == batch_to_check]['File'].tolist()
         offset_rep = st.slider("Vertical Offset (µm)", 1, 50, 10, key="rep_off")
@@ -143,7 +151,12 @@ if not df.empty:
         for i, f in enumerate(sorted(batch_files)):
             if f in profiles:
                 fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], y=profiles[f]['Amplitude_um_Norm'] + (i * offset_rep), mode='lines', name=f"Rep {i+1}"))
-        fig_rep.update_layout(template="simple_white", xaxis=dict(mirror=True, showline=True, linecolor='black'), yaxis=dict(mirror=True, showline=True, linecolor='black'))
+        
+        fig_rep.update_layout(
+            template="simple_white",
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=1.5, autorange=True)
+        )
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[4]:
@@ -162,7 +175,16 @@ if not df.empty:
                 name = st.session_state['legend_map'].get(sample, sample)
                 fig_glob.add_trace(go.Scatter(x=mean_prof['L_grp'], y=mean_prof['Amplitude_um_Norm'] + (i * offset_global), mode='lines', name=name, line=dict(width=2)))
         
-        fig_glob.update_layout(template="simple_white", font=dict(family="Arial", size=14), xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'), yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black'))
+        # AUTO-ADJUSTABLE QUALITY SETTINGS
+        fig_glob.update_layout(
+            template="simple_white",
+            font=dict(family="Arial", size=14, color="black"),
+            # Mirror box border that auto-adjusts to number of profiles
+            xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2, title_font=dict(size=16)),
+            yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2, title_font=dict(size=16), autorange=True),
+            legend=dict(bordercolor="black", borderwidth=1, font=dict(size=12)),
+            margin=dict(l=80, r=40, t=40, b=80)
+        )
         st.plotly_chart(fig_glob, use_container_width=True)
 
     with tabs[5]:
