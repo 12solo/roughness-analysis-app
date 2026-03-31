@@ -145,7 +145,7 @@ if not df_master.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Stack (Right-Aligned Legend)")
+        st.subheader("Representative Stack (Left-Aligned, Transparent)")
         offset_global = st.slider("Group Offset (µm)", 1, 250, 60)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -162,15 +162,15 @@ if not df_master.empty:
             
             fig_glob.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
             
-            # UPDATED: Legend shifted to the right corner
+            # UPDATED: Legend shifted to the left corner and removed background
             fig_glob.add_annotation(
-                x=current_profile['Length_mm'].max(), 
+                x=current_profile['Length_mm'].min(), 
                 y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
                 yshift=20, 
                 text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
-                showarrow=False, align="left", xanchor="right", yanchor="bottom",
+                showarrow=False, align="left", xanchor="left", yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor="rgba(255,255,255,0.7)"
+                bgcolor=None # Removed white background
             )
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
