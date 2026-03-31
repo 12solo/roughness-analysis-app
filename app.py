@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy import stats
 import re
+import os
 
 # ==========================================
 # 1. INITIALIZE SESSION STATE
@@ -105,21 +106,30 @@ with st.sidebar:
 df = st.session_state['master_df']
 profiles = st.session_state['profile_dict']
 
-# Shared Layout Settings
+# SHARED LAYOUT: Times New Roman, Bold, High-Quality Border
 SHARED_LAYOUT = dict(
     template="simple_white",
     height=850,
-    font=dict(family="Arial", size=14, color="black"),
-    margin=dict(l=80, r=40, t=60, b=80),
-    xaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16)),
-    yaxis=dict(mirror=True, ticks='outside', showline=True, linecolor='black', linewidth=2.5, title_font=dict(size=16), autorange=True),
+    font=dict(family="Times New Roman", size=16, color="black"),
+    margin=dict(l=100, r=40, t=60, b=100),
+    xaxis=dict(
+        mirror=True, ticks='outside', showline=True, 
+        linecolor='black', linewidth=2.5, 
+        tickfont=dict(family="Times New Roman", size=14, color="black")
+    ),
+    yaxis=dict(
+        mirror=True, ticks='outside', showline=True, 
+        linecolor='black', linewidth=2.5, 
+        tickfont=dict(family="Times New Roman", size=14, color="black"),
+        autorange=True
+    ),
 )
 
 if not df.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🌊 Individual Ra Profile", "🎨 Batch Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
     with tabs[3]:
-        st.subheader("Batch Replicate Inspection (Direct Labels)")
+        st.subheader("Batch Replicate Inspection (No Extension)")
         batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
         batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
         offset_rep = st.slider("Vertical Offset (µm)", 1, 50, 15, key="rep_off")
@@ -131,23 +141,29 @@ if not df.empty:
             if f in profiles:
                 y_shift = i * offset_rep
                 p_data = profiles[f]
-                # Add Profile Line
+                # Remove file extension for display
+                clean_name = os.path.splitext(f)[0]
+                
                 fig_rep.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
                 
-                # Add In-Plot Legend (File name)
+                # In-Plot Label (Clean name)
                 fig_rep.add_annotation(x=p_data['Length_mm'].mean(), y=y_shift + p_data['Amplitude_um_Norm'].max() + 2,
-                                     text=f"<b>Rep {i+1} ({f})</b>", showarrow=False, font=dict(size=11))
+                                     text=f"<b>Rep {i+1} ({clean_name})</b>", showarrow=False, 
+                                     font=dict(family="Times New Roman", size=13))
                 
                 for t in [-5, 0, 5]:
-                    tick_vals.append(t + y_shift); tick_text.append(str(t))
+                    tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
         
         fig_rep.update_layout(**SHARED_LAYOUT)
-        fig_rep.update_layout(xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>",
-                            yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text))
+        fig_rep.update_layout(
+            xaxis_title="<b>Travel Length (mm)</b>", 
+            yaxis_title="<b>Amplitude (µm)</b>",
+            yaxis=dict(tickmode='array', tickvals=tick_vals, ticktext=tick_text)
+        )
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[4]:
-        st.subheader("Representative Profile Comparison (Mean ± SD Labels)")
+        st.subheader("Representative Profile Comparison (Times New Roman Style)")
         offset_global = st.slider("Group Vertical Offset (µm)", 1, 150, 40, key="glob_off")
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -157,8 +173,6 @@ if not df.empty:
             sample_data = df[df['Sample'] == sample]
             m_ra = sample_data['Ra'].mean()
             s_ra = sample_data['Ra'].std()
-            
-            # Select Real Representative
             closest_file = sample_data.iloc[(sample_data['Ra'] - m_ra).abs().argsort()[:1]]['File'].values[0]
             
             if closest_file in profiles:
@@ -166,36 +180,25 @@ if not df.empty:
                 y_shift = i * offset_global
                 name = st.session_state['legend_map'].get(sample, sample)
                 
-                # Add Profile Line
                 fig_glob.add_trace(go.Scatter(x=p_data['Length_mm'], y=p_data['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, line=dict(width=2.5), showlegend=False))
                 
-                # Add In-Plot Legend with Mean + SD
+                # Bold Times New Roman Annotation
                 label_text = f"<b>{name}</b><br>Ra: {m_ra:.3f} ± {s_ra:.3f} µm"
                 fig_glob.add_annotation(x=p_data['Length_mm'].min(), y=y_shift + offset_global/3,
                                       text=label_text, showarrow=False, align="left", xanchor="left",
-                                      font=dict(size=13, color="black"), bgcolor="rgba(255,255,255,0.7)")
+                                      font=dict(family="Times New Roman", size=15, color="black"), 
+                                      bgcolor="rgba(255,255,255,0.7)")
                 
                 for t in [-10, 0, 10]:
-                    t_vals.append(t + y_shift); t_text.append(str(t))
+                    t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
         
         fig_glob.update_layout(**SHARED_LAYOUT)
         fig_glob.update_layout(
-            xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>",
+            xaxis_title="<b>Travel Length (mm)</b>", 
+            yaxis_title="<b>Amplitude (µm)</b>",
             yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text),
-            margin=dict(t=80) # Extra space for top labels
+            margin=dict(t=80) 
         )
         st.plotly_chart(fig_glob, use_container_width=True)
-        st.info("💡 Labels are placed directly on the plot. Ra values represent the Mean ± SD of the entire batch.")
-
-    with tabs[5]:
-        wide_list = []
-        for fname, p_data in profiles.items():
-            meta = df[df['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
 else:
-    st.info("👋 Upload your sample batches to begin.")
+    st.info("👋 Upload data batches to begin.")
