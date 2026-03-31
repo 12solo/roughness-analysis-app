@@ -112,10 +112,6 @@ AXIS_STYLE = dict(
 if not df.empty:
     tabs = st.tabs(["📊 Dataset", "📉 Trends", "🌊 Individual Profile", "🎨 Replicate Stack", "🏛️ Representative Stack", "💾 Export"])
 
-    with tabs[0]:
-        st.subheader("Summary Table")
-        st.dataframe(df, use_container_width=True)
-
     with tabs[1]:
         st.subheader("Inter-Sample Trends")
         params = [p for p in ["Ra", "Rq", "Rz", "Rt"] if p in df.columns]
@@ -127,17 +123,8 @@ if not df.empty:
         fig_trend.update_layout(xaxis_title="<b>Sample ID</b>", yaxis_title=f"<b>Mean {p_sel} (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
         st.plotly_chart(fig_trend, use_container_width=True)
 
-    with tabs[2]:
-        st.subheader("Single Profile View")
-        sel_f = st.selectbox("Select File:", list(profiles.keys()))
-        p_data = profiles[sel_f]
-        fig_p = px.line(p_data, x='Length_mm', y='Amplitude_um_Norm', template="simple_white")
-        fig_p.add_hline(y=0, line_dash="dash", line_color="red")
-        fig_p.update_layout(xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=AXIS_STYLE)
-        st.plotly_chart(fig_p, use_container_width=True)
-
     with tabs[3]:
-        st.subheader("Batch Replicate Stack")
+        st.subheader("Batch Replicate Stack (Clean Labels)")
         batch_to_check = st.selectbox("Select Batch:", sorted(df['Sample'].unique()))
         batch_files = sorted(df[df['Sample'] == batch_to_check]['File'].tolist())
         offset_rep = st.slider("Vertical Offset (µm)", 1, 50, 15)
@@ -148,7 +135,16 @@ if not df.empty:
             y_shift = i * offset_rep
             clean_name = os.path.splitext(f)[0]
             fig_rep.add_trace(go.Scatter(x=profiles[f]['Length_mm'], y=profiles[f]['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
-            fig_rep.add_annotation(x=profiles[f]['Length_mm'].mean(), y=y_shift + 5, text=f"<b>Rep {i+1} ({clean_name})</b>", showarrow=False, font=dict(family="Times New Roman", size=14))
+            
+            # BOLD IN-PLOT LABEL WITH BG TO AVOID OVERLAP
+            fig_rep.add_annotation(
+                x=profiles[f]['Length_mm'].mean(), 
+                y=y_shift + profiles[f]['Amplitude_um_Norm'].max() + 3, 
+                text=f"<b>Rep {i+1} ({clean_name})</b>", 
+                showarrow=False, 
+                font=dict(family="Times New Roman", size=14, color="black"),
+                bgcolor="white", opacity=0.9
+            )
             for t in [-5, 0, 5]:
                 tick_vals.append(t + y_shift); tick_text.append(f"<b>{t}</b>")
         
@@ -156,8 +152,8 @@ if not df.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[4]:
-        st.subheader("Representative Stack (Times New Roman Bold)")
-        offset_global = st.slider("Group Offset (µm)", 1, 150, 40)
+        st.subheader("Representative Stack (Publication Quality)")
+        offset_global = st.slider("Group Offset (µm)", 1, 150, 50)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
         unique_samples = sorted(df['Sample'].unique())
@@ -170,23 +166,20 @@ if not df.empty:
             name = st.session_state['legend_map'].get(sample, sample)
             
             fig_glob.add_trace(go.Scatter(x=profiles[closest_file]['Length_mm'], y=profiles[closest_file]['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
-            fig_glob.add_annotation(x=profiles[closest_file]['Length_mm'].min(), y=y_shift + offset_global/3, text=f"<b>{name}</b><br>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm", showarrow=False, align="left", xanchor="left", font=dict(family="Times New Roman", size=16), bgcolor="rgba(255,255,255,0.7)")
+            
+            # BOLD TIMES NEW ROMAN LABELS WITH WHITE BOX TO PREVENT OVERLAP
+            fig_glob.add_annotation(
+                x=profiles[closest_file]['Length_mm'].min(), 
+                y=y_shift + offset_global/3, 
+                text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
+                showarrow=False, align="left", xanchor="left", 
+                font=dict(family="Times New Roman", size=16, color="black"), 
+                bgcolor="rgba(255,255,255,0.85)", bordercolor="black", borderwidth=1
+            )
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
         
         fig_glob.update_layout(template="simple_white", height=850, xaxis_title="<b>Travel Length (mm)</b>", yaxis_title="<b>Amplitude (µm)</b>", xaxis=AXIS_STYLE, yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE))
         st.plotly_chart(fig_glob, use_container_width=True)
-
-    with tabs[5]:
-        st.subheader("Bulk Export")
-        wide_list = []
-        for fname, p_data in profiles.items():
-            meta = df[df['File'] == fname].iloc[0]
-            header = f"{st.session_state['legend_map'].get(meta['Sample'], meta['Sample'])}_{fname}"
-            temp = p_data[['Length_mm', 'Amplitude_um']].copy()
-            temp.columns = [f"{header}_L", f"{header}_Amp"]
-            wide_list.append(temp)
-        if wide_list:
-            st.download_button("Download CSV", pd.concat(wide_list, axis=1).to_csv(index=False).encode('utf-8'), "export.csv")
 else:
-    st.info("👋 Upload data batches to activate the dashboard.")
+    st.info("👋 Upload data batches to begin.")
