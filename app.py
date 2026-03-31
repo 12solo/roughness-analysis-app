@@ -8,7 +8,7 @@ import re
 import io
 
 # ==========================================
-# 1. INITIALIZE SESSION STATE
+# 1. INITIALIZE SESSION STATE (Prevents KeyErrors)
 # ==========================================
 if 'summary_df' not in st.session_state:
     st.session_state['summary_df'] = pd.DataFrame()
@@ -44,7 +44,7 @@ class RoughnessLoader:
                 row_summary = meta.copy()
                 found_params = {}
 
-                # PASS 1: SUMMARY PARAMETERS
+                # PASS 1: EXTRACT SUMMARY PARAMETERS
                 for sheet in xl.sheet_names:
                     df_sheet = xl.parse(sheet, header=None)
                     for r in range(min(len(df_sheet), 100)):
@@ -79,27 +79,26 @@ class RoughnessLoader:
 # 3. UI LAYOUT
 # ==========================================
 st.set_page_config(page_title="Scientific Roughness Lab", layout="wide")
-st.title("🔬 Advanced Surface Roughness Scientific Dashboard")
+st.title("🔬 Advanced Surface Roughness Dashboard")
 
 # SIDEBAR
 st.sidebar.header("1. Data Input")
-uploaded_files = st.sidebar.file_uploader("Upload Bulk (.xlsx)", accept_multiple_files=True, type=['xlsx'])
+uploaded_files = st.sidebar.file_uploader("Upload .xlsx Files", accept_multiple_files=True, type=['xlsx'])
 
 if uploaded_files:
-    st.sidebar.subheader("2. Sample Metadata")
+    st.sidebar.subheader("2. Research Scenario")
+    # This choice determines the statistical output
+    scenario = st.sidebar.radio(
+        "Select Scenario:",
+        ["Replicate Tests (Same Sample/Batch)", "Comparative Study (Different Samples/Dates)"]
+    )
     
-    # NEW OPTION: Study Type
-    study_type = st.sidebar.radio("Study Type:", 
-                                  ["Single Sample (Replicate Tests)", 
-                                   "Multiple Samples (Comparative/Trend Study)"])
+    m_id = st.sidebar.text_input("Material / Specimen Name", "Specimen_01")
     
-    m_id = st.sidebar.text_input("Specimen ID / Material", "Sample_01")
-    
-    if study_type == "Multiple Samples (Comparative/Trend Study)":
+    if scenario == "Comparative Study (Different Samples/Dates)":
         cond = st.sidebar.selectbox("Condition / Formulation", ["Control", "Oven Ageing", "UV Exposure", "Humidity"])
-        day = st.sidebar.number_input("Ageing Duration (Days)", min_value=0, step=1)
+        day = st.sidebar.number_input("Ageing Day", min_value=0, step=1)
     else:
-        # For replicates, we fix these so they group together
         cond = "Single Batch"
         day = 0
 
@@ -107,16 +106,16 @@ if uploaded_files:
         loader = RoughnessLoader()
         metas = []
         for f in uploaded_files:
-            # For comparative studies, we can still try to grab Day from filename if not specified
+            # Auto-detect day from filename if comparative
             day_val = day
-            if study_type == "Multiple Samples (Comparative/Trend Study)":
+            if scenario == "Comparative Study (Different Samples/Dates)":
                 day_match = re.search(r'\d+', f.name)
                 if day_match and day == 0: day_val = int(day_match.group())
 
             metas.append({
                 "File": f.name, "Material": m_id, 
                 "Condition": cond, "Day": day_val,
-                "Study": study_type
+                "Study_Type": scenario # Saved as 'Study_Type' to avoid KeyErrors
             })
         
         sum_df, prof_dict = loader.process_files(uploaded_files, metas)
@@ -127,12 +126,12 @@ if uploaded_files:
 if not st.session_state['summary_df'].empty:
     df = st.session_state['summary_df']
     prof_dict = st.session_state['profile_dict']
-    study_mode = df['Study'].iloc[0]
+    study_mode = df['Study_Type'].iloc[0]
     
     tabs = st.tabs(["📋 Dataset", "📈 Scientific Stats", "📉 Profile Analysis", "💾 Columnar Export"])
 
     with tabs[0]:
-        st.subheader("Raw Extracted Summary")
+        st.subheader("Extracted Summary Table")
         st.dataframe(df, use_container_width=True)
 
     with tabs[1]:
@@ -140,81 +139,82 @@ if not st.session_state['summary_df'].empty:
         if params:
             p_sel = st.selectbox("Select Parameter", params)
             
-            if study_mode == "Single Sample (Replicate Tests)":
-                st.subheader(f"Statistical Precision: {m_id}")
+            if "Replicate" in study_mode:
+                st.subheader(f"Statistical Reliability for {m_id}")
                 
-                # Calculate Detailed Stats for Replicates
+                # Scientific Replicate Analysis
                 mean_val = df[p_sel].mean()
                 std_val = df[p_sel].std()
-                cv_val = (std_val / mean_val) * 100 if mean_val != 0 else 0
+                cv_val = (std_val / mean_val * 100) if mean_val != 0 else 0
                 
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Mean (µm)", f"{mean_val:.4f}")
                 c2.metric("Std Dev (σ)", f"{std_val:.4f}")
-                c3.metric("Replicates (n)", len(df))
+                c3.metric("Tests (n)", len(df))
                 c4.metric("CV (%)", f"{cv_val:.2f}%")
                 
-                st.write("### Replicate Distribution")
-                fig_hist = px.histogram(df, x=p_sel, marginal="rug", title=f"Histogram of {p_sel} Replicates", nbins=10)
+                st.write("### Histogram of Measurements")
+                fig_hist = px.histogram(df, x=p_sel, marginal="box", title=f"Replicate Spread: {p_sel}")
                 st.plotly_chart(fig_hist, use_container_width=True)
-                st.info("💡 **Scientific Note:** A CV% < 10% indicates excellent measurement repeatability.")
+                
+                st.info("💡 **Scientific Note:** A Coefficient of Variation (CV%) below 10% is the target for high-precision surface analysis.")
 
             else:
-                st.subheader("Comparative & Trend Analysis")
+                st.subheader("Comparative Trend & Significance")
                 
-                # Grouped stats for trends
-                group_stats = df.groupby(["Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
-                group_stats['CI_95'] = 1.96 * (group_stats['std'] / np.sqrt(group_stats['count']))
+                # Trend calculation with Error Bars
+                grp = df.groupby(["Condition", "Day"])[p_sel].agg(['mean', 'std', 'count']).reset_index()
+                grp['CI_95'] = 1.96 * (grp['std'] / np.sqrt(grp['count']))
                 
-                st.dataframe(group_stats, use_container_width=True)
+                st.write("### Mean Values per Condition/Day")
+                st.dataframe(grp.style.format(precision=4), use_container_width=True)
                 
-                # Trend Plot
-                st.write("### Degradation Trend")
+                st.write("### Degradation Trend Plot")
                 fig_trend = go.Figure()
-                for c in group_stats['Condition'].unique():
-                    subset = group_stats[group_stats['Condition'] == c].sort_values('Day')
+                for c in grp['Condition'].unique():
+                    subset = grp[grp['Condition'] == c].sort_values('Day')
                     fig_trend.add_trace(go.Scatter(
                         x=subset['Day'], y=subset['mean'],
                         error_y=dict(type='data', array=subset['CI_95'], visible=True),
                         name=c, mode='lines+markers'
                     ))
-                fig_trend.update_layout(xaxis_title="Days", yaxis_title=f"Mean {p_sel} (µm)", template="plotly_white")
+                fig_trend.update_layout(xaxis_title="Ageing Days", yaxis_title=f"Mean {p_sel} (µm)", template="plotly_white")
                 st.plotly_chart(fig_trend, use_container_width=True)
+                
 
     with tabs[2]:
-        st.subheader("Surface Topography Plots (Col E & F)")
+        st.subheader("Surface Roughness Profiles (Col E & F)")
         if prof_dict:
-            f_sel = st.selectbox("Select File", list(prof_dict.keys()))
+            f_sel = st.selectbox("Select Test File", list(prof_dict.keys()))
             subset_p = prof_dict[f_sel]['data']
-            fig_p = px.line(subset_p, x='Length_mm', y='Amplitude_um', title=f"Surface Profile: {f_sel}")
+            fig_p = px.line(subset_p, x='Length_mm', y='Amplitude_um', title=f"Surface Topography: {f_sel}")
             st.plotly_chart(fig_p, use_container_width=True)
 
     with tabs[3]:
         st.subheader("Bulk Export (Columnar Wide Format)")
-        naming_opt = st.radio("Label Columns By:", ["File Name", "Material_Condition", "Study_Type"], horizontal=True)
+        naming = st.radio("Label Columns By:", ["File Name", "Material_Condition", "Study_Type"], horizontal=True)
         
-        wide_dfs = []
+        wide_list = []
         for fname, content in prof_dict.items():
             temp_df = content['data'].copy()
             m = content['meta']
             
-            if naming_opt == "File Name": header = fname
-            elif naming_opt == "Material_Condition": header = f"{m['Material']}_{m['Condition']}"
-            else: header = m['Study']
+            header = fname if naming == "File Name" else (f"{m['Material']}_{m['Condition']}" if naming == "Material_Condition" else m['Study_Type'])
 
-            base_header = header
+            # Handle duplicates in headers
+            base_h = header
             counter = 1
-            while f"{header}_Length(mm)" in [col for d in wide_dfs for col in d.columns]:
-                header = f"{base_header}_Rep{counter}"
+            while f"{header}_Length(mm)" in [col for d in wide_list for col in d.columns]:
+                header = f"{base_h}_Rep{counter}"
                 counter += 1
             
             temp_df.columns = [f"{header}_Length(mm)", f"{header}_Amplitude(um)"]
-            wide_dfs.append(temp_df)
+            wide_list.append(temp_df)
         
-        if wide_dfs:
-            master_wide = pd.concat(wide_dfs, axis=1)
+        if wide_list:
+            master_wide = pd.concat(wide_list, axis=1)
             st.dataframe(master_wide.head(10))
             csv = master_wide.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Columnar CSV", csv, "columnar_profiles.csv", "text/csv")
+            st.download_button("Download Unified CSV", csv, "roughness_profiles_wide.csv", "text/csv")
 else:
-    st.info("👋 Select Study Type and upload files to begin.")
+    st.info("👋 Select your scenario and upload files to begin.")
