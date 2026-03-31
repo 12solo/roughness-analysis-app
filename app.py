@@ -129,7 +129,6 @@ if not df_master.empty:
             current_profile = prof_dict[f]
             fig_rep.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=f"Rep {i+1}", showlegend=False))
             
-            # Position Legend at center-X as requested
             fig_rep.add_annotation(
                 x=current_profile['Length_mm'].mean(), 
                 y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
@@ -146,7 +145,7 @@ if not df_master.empty:
         st.plotly_chart(fig_rep, use_container_width=True)
 
     with tabs[3]:
-        st.subheader("Representative Stack (Corrected Legend Position)")
+        st.subheader("Representative Stack (Right-Aligned Legend)")
         offset_global = st.slider("Group Offset (µm)", 1, 250, 60)
         fig_glob = go.Figure()
         t_vals, t_text = [], []
@@ -163,15 +162,15 @@ if not df_master.empty:
             
             fig_glob.add_trace(go.Scatter(x=current_profile['Length_mm'], y=current_profile['Amplitude_um_Norm'] + y_shift, mode='lines', name=name, showlegend=False))
             
-            # CORRECTED: Matched Representative legend to Batch Replicate center-X logic
+            # UPDATED: Legend shifted to the right corner
             fig_glob.add_annotation(
-                x=current_profile['Length_mm'].mean(), 
+                x=current_profile['Length_mm'].max(), 
                 y=y_shift + current_profile['Amplitude_um_Norm'].max(), 
-                yshift=20, # Added vertical space to clear peaks
+                yshift=20, 
                 text=f"<b>{name}</b><br><b>Ra: {mean_ra:.3f} ± {std_ra:.3f} µm</b>", 
-                showarrow=False, align="center", xanchor="center",
+                showarrow=False, align="right", xanchor="right", yanchor="bottom",
                 font=dict(family="Times New Roman", size=16, color="black"), 
-                bgcolor="rgba(255,255,255,0.7)" # Semi-transparent to keep lines visible but text readable
+                bgcolor="rgba(255,255,255,0.7)"
             )
             for t in [-10, 0, 10]:
                 t_vals.append(t + y_shift); t_text.append(f"<b>{t}</b>")
