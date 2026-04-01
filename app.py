@@ -235,8 +235,8 @@ if not df_master.empty:
         
         fig_glob.update_layout(
             template="simple_white", height=900,
-            xaxis_title="<b>Travel Length (mm)</b>", 
-            yaxis_title="<b>Amplitude (µm)</b>", 
+            xaxis_title="<b>Wavelength (mm)</b>", 
+            yaxis_title="<b>Roughness (µm)</b>", 
             xaxis=AXIS_STYLE, 
             yaxis=dict(tickmode='array', tickvals=t_vals, ticktext=t_text, **AXIS_STYLE),
             margin=dict(l=100, r=40, t=80, b=100)
