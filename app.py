@@ -17,7 +17,7 @@ import base64
 # ==========================================
 st.set_page_config(
     page_title="SRoughnessLab Pro | Solomon Scientific",
-    page_icon="SR LOGO.png",
+    page_icon="Solomon_SR_Logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -71,13 +71,21 @@ html, body, [class*="css"] {
     background: #ffffff !important; /* Pure White Background */
     border-right: 1px solid var(--border-light);
 }
+
+/* Fixed the pooping text bug by removing span from this broad override */
 [data-testid="stSidebar"] .stMarkdown,
 [data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span {
+[data-testid="stSidebar"] p {
     color: var(--text-dark) !important;
     font-family: var(--font-body);
 }
+
+/* Protect Streamlit Material Icons from breaking into text */
+.material-symbols-rounded,
+[data-testid="stIconMaterial"] {
+    font-family: "Material Symbols Rounded" !important;
+}
+
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
@@ -248,7 +256,7 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 def render_header():
-    logo_path = "SR LOGO.png"
+    logo_path = "Solomon_SR_Logo.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
         icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5); flex-shrink: 0; background: white;">'
@@ -353,7 +361,7 @@ def info_box(text, kind="info"):
     """, unsafe_allow_html=True)
 
 def render_sidebar_brand():
-    logo_path = "SR LOGO.png"
+    logo_path = "Solomon_SR_Logo.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
         icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 52px; height: 52px; margin: 0 auto 0.75rem auto; border-radius: 10px; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.1); object-fit: contain; background: white;">'
