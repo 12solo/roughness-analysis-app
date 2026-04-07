@@ -17,13 +17,13 @@ import base64
 # ==========================================
 st.set_page_config(
     page_title="SRoughnessLab Pro | Solomon Scientific",
-    page_icon="SR LOGO.png",  # Changed from "🔬" to your local image file
+    page_icon="SR LOGO.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# GLOBAL CUSTOM CSS — Professional Theme
+# GLOBAL CUSTOM CSS — Light Theme with Dark Headers
 # ==========================================
 st.markdown("""
 <style>
@@ -32,87 +32,81 @@ st.markdown("""
 
 /* ── CSS Variables ────────────────────────────── */
 :root {
+    /* Dark Brand Colors (Kept for Headings/Sidebar) */
     --navy:       #0b1120;
     --navy-mid:   #111827;
     --navy-light: #1a2540;
     --gold:       #c9a84c;
     --gold-light: #e2c97e;
     --gold-dim:   #9c7a32;
-    --silver:     #a8b4c8;
-    --white:      #f0f4fb;
-    --white-dim:  #c8d0de;
+    
+    /* Light Mode Colors (For everything else) */
+    --bg-white:   #ffffff;
+    --bg-offwhite:#f8fafc;
+    --text-dark:  #1e293b;
+    --text-muted: #64748b;
+    --border-light:#e2e8f0;
+    
     --accent:     #3a7bd5;
     --red:        #e05252;
     --green:      #3db87a;
-    --border:     rgba(201,168,76,0.22);
-    --card-bg:    rgba(26,37,64,0.70);
+    
     --font-head:  'Playfair Display', Georgia, serif;
     --font-mono:  'IBM Plex Mono', 'Courier New', monospace;
     --font-body:  'IBM Plex Sans', 'Segoe UI', sans-serif;
 }
 
-/* ── Base & Body ──────────────────────────────── */
+/* ── Base & Body (Light Mode) ─────────────────── */
 html, body, [class*="css"] {
     font-family: var(--font-body);
-    color: var(--white);
+    color: var(--text-dark);
 }
 .stApp {
-    background: linear-gradient(135deg, #0b1120 0%, #0f1a2e 50%, #0b1120 100%);
-    min-height: 100vh;
+    background: var(--bg-white);
 }
+.stApp::before { display: none; } /* Remove dark grid */
 
-/* Subtle grid texture overlay */
-.stApp::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-image:
-        linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-}
-
-/* ── Sidebar ──────────────────────────────────── */
+/* ── Sidebar (Kept Dark) ──────────────────────── */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #080e1c 0%, #0d1628 100%);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--navy-light);
 }
 [data-testid="stSidebar"] .stMarkdown,
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] p,
 [data-testid="stSidebar"] span {
-    color: var(--white-dim) !important;
+    color: #c8d0de !important;
     font-family: var(--font-body);
 }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
     color: var(--gold) !important;
-    font-family: var(--font-body);
     font-weight: 600;
     font-size: 0.75rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
 }
-[data-testid="stSidebar"] hr {
-    border-color: var(--border);
-    margin: 1rem 0;
-}
+[data-testid="stSidebar"] hr { border-color: rgba(201,168,76,0.2); }
 
-/* ── Input Widgets ────────────────────────────── */
+/* Sidebar Inputs (Dark) */
 [data-testid="stSidebar"] input[type="text"],
 [data-testid="stSidebar"] input[type="number"],
 [data-testid="stSidebar"] textarea,
-[data-testid="stSidebar"] select,
+[data-testid="stSidebar"] select {
+    background: rgba(11,17,32,0.8) !important;
+    border: 1px solid rgba(201,168,76,0.22) !important;
+    color: #ffffff !important;
+}
+
+/* ── Main Area Inputs (Light Mode) ────────────── */
 .stSelectbox > div > div,
 .stTextInput > div > div > input,
 .stNumberInput > div > div > input {
-    background: rgba(11,17,32,0.8) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--bg-white) !important;
+    border: 1px solid var(--border-light) !important;
     border-radius: 4px !important;
-    color: var(--white) !important;
+    color: var(--text-dark) !important;
     font-family: var(--font-mono) !important;
     font-size: 0.82rem !important;
 }
@@ -138,7 +132,7 @@ html, body, [class*="css"] {
 }
 .stButton > button:hover {
     background: linear-gradient(135deg, var(--gold), var(--gold-light)) !important;
-    box-shadow: 0 4px 20px rgba(201,168,76,0.35) !important;
+    box-shadow: 0 4px 15px rgba(201,168,76,0.3) !important;
     transform: translateY(-1px) !important;
 }
 .stButton > button[kind="primary"] {
@@ -146,161 +140,86 @@ html, body, [class*="css"] {
     color: white !important;
 }
 
-/* Download buttons */
+/* Download buttons (Light Mode) */
 [data-testid="stDownloadButton"] > button {
-    background: rgba(26,37,64,0.9) !important;
-    color: var(--gold) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--bg-offwhite) !important;
+    color: var(--navy) !important;
+    border: 1px solid var(--border-light) !important;
     border-radius: 3px !important;
-    font-family: var(--font-body) !important;
-    font-weight: 500 !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.05em !important;
-    transition: all 0.2s ease !important;
+    font-weight: 600 !important;
 }
 [data-testid="stDownloadButton"] > button:hover {
-    background: rgba(201,168,76,0.12) !important;
+    background: #ffffff !important;
     border-color: var(--gold) !important;
-    box-shadow: 0 4px 16px rgba(201,168,76,0.2) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
 }
 
-/* ── Tabs ─────────────────────────────────────── */
+/* ── Tabs (Light Mode) ────────────────────────── */
 [data-testid="stTabs"] [role="tablist"] {
-    background: rgba(11,17,32,0.6);
-    border-bottom: 1px solid var(--border);
-    gap: 0;
-    padding: 0;
+    background: var(--bg-offwhite);
+    border-bottom: 1px solid var(--border-light);
+    gap: 0; padding: 0;
 }
 [data-testid="stTabs"] [role="tab"] {
-    color: var(--silver) !important;
+    color: var(--text-muted) !important;
     font-family: var(--font-body) !important;
     font-size: 0.78rem !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
     letter-spacing: 0.06em !important;
     text-transform: uppercase !important;
     padding: 0.7rem 1.2rem !important;
-    border-radius: 0 !important;
     border-bottom: 2px solid transparent !important;
-    transition: all 0.2s !important;
 }
 [data-testid="stTabs"] [role="tab"]:hover {
-    color: var(--gold-light) !important;
-    background: rgba(201,168,76,0.05) !important;
+    color: var(--navy) !important;
+    background: rgba(0,0,0,0.02) !important;
 }
 [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-    color: var(--gold) !important;
+    color: var(--navy) !important;
     border-bottom-color: var(--gold) !important;
-    background: rgba(201,168,76,0.08) !important;
+    background: var(--bg-white) !important;
 }
 
-/* ── DataFrames ───────────────────────────────── */
+/* ── DataFrames (Light Mode) ──────────────────── */
 [data-testid="stDataFrame"] {
-    border: 1px solid var(--border) !important;
+    border: 1px solid var(--border-light) !important;
     border-radius: 6px !important;
-    overflow: hidden !important;
-}
-[data-testid="stDataFrame"] table {
-    font-family: var(--font-mono) !important;
-    font-size: 0.78rem !important;
+    background: var(--bg-white) !important;
 }
 [data-testid="stDataFrame"] th {
-    background: rgba(201,168,76,0.12) !important;
-    color: var(--gold-light) !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-    border-bottom: 1px solid var(--border) !important;
+    background: var(--bg-offwhite) !important;
+    color: var(--navy) !important;
+    border-bottom: 1px solid var(--border-light) !important;
 }
-[data-testid="stDataFrame"] tr:hover {
-    background: rgba(201,168,76,0.05) !important;
+[data-testid="stDataFrame"] td {
+    color: var(--text-dark) !important;
 }
 
-/* ── Expanders ────────────────────────────────── */
+/* ── Expanders (Light Mode) ───────────────────── */
 [data-testid="stExpander"] {
-    border: 1px solid var(--border) !important;
+    border: 1px solid var(--border-light) !important;
     border-radius: 4px !important;
-    background: rgba(26,37,64,0.4) !important;
+    background: var(--bg-white) !important;
 }
 [data-testid="stExpander"] summary {
-    color: var(--gold-light) !important;
-    font-family: var(--font-body) !important;
-    font-size: 0.82rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.06em !important;
+    color: var(--navy) !important;
+    font-weight: 600 !important;
 }
 
-/* ── Radio & Checkbox ─────────────────────────── */
-[data-testid="stRadio"] label,
-[data-testid="stCheckbox"] label {
-    color: var(--white-dim) !important;
-    font-family: var(--font-body) !important;
-    font-size: 0.82rem !important;
-}
-
-/* ── Sliders ──────────────────────────────────── */
-[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {
-    background: var(--gold) !important;
-    border-color: var(--gold) !important;
-}
-[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stThumbValue"] {
-    color: var(--gold) !important;
-}
-
-/* ── Alerts & Messages ────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 4px !important;
-    font-family: var(--font-body) !important;
-    font-size: 0.82rem !important;
-}
-.stSuccess {
-    background: rgba(61,184,122,0.12) !important;
-    border-left-color: var(--green) !important;
-}
-.stWarning {
-    background: rgba(201,168,76,0.12) !important;
-    border-left-color: var(--gold) !important;
-}
-.stError {
-    background: rgba(224,82,82,0.12) !important;
-    border-left-color: var(--red) !important;
-}
-.stInfo {
-    background: rgba(58,123,213,0.12) !important;
-    border-left-color: var(--accent) !important;
-}
-
-/* ── Text Area ────────────────────────────────── */
+/* ── Text Area & Selectors (Light Mode) ───────── */
 .stTextArea textarea {
-    background: rgba(11,17,32,0.8) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--white-dim) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.78rem !important;
-    border-radius: 4px !important;
+    background: var(--bg-white) !important;
+    border: 1px solid var(--border-light) !important;
+    color: var(--text-dark) !important;
 }
-
-/* ── Multiselect ──────────────────────────────── */
 [data-baseweb="tag"] {
-    background: rgba(201,168,76,0.2) !important;
-    border: 1px solid var(--border) !important;
+    background: var(--bg-offwhite) !important;
+    border: 1px solid var(--border-light) !important;
 }
-[data-baseweb="tag"] span {
-    color: var(--gold-light) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.75rem !important;
-}
+[data-baseweb="tag"] span { color: var(--navy) !important; }
 
-/* ── Plotly Charts ────────────────────────────── */
-.js-plotly-plot {
-    border: 1px solid var(--border) !important;
-    border-radius: 6px !important;
-    background: rgba(11,17,32,0.5) !important;
-}
-
-/* ── Scrollbar ────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--navy); }
-::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+/* ── Alerts ───────────────────────────────────── */
+[data-testid="stAlert"] { color: var(--text-dark) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -314,21 +233,26 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 def render_header():
-    logo_path = "SR LOGO.png"
+    """Main Header: Dark background retained."""
+    logo_path = "Solomon_SR_Logo.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
-        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(201,168,76,0.3); flex-shrink: 0; background: white;">'
+        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5); flex-shrink: 0; background: white;">'
     else:
-        icon_html = '<div style="width: 54px; height: 54px; background: linear-gradient(135deg, #9c7a32, #c9a84c); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 4px 20px rgba(201,168,76,0.3); flex-shrink: 0;">🔬</div>'
+        icon_html = '<div style="width: 54px; height: 54px; background: linear-gradient(135deg, #9c7a32, #c9a84c); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 4px 20px rgba(0,0,0,0.3); flex-shrink: 0;">🔬</div>'
 
     st.markdown(f"""
     <div style="
-        padding: 2rem 0 1.5rem 0;
-        border-bottom: 1px solid rgba(201,168,76,0.25);
+        background: linear-gradient(135deg, #0b1120 0%, #0f1a2e 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 8px;
+        border: 1px solid rgba(201,168,76,0.3);
         margin-bottom: 1.5rem;
+        margin-top: 1rem;
         display: flex;
         align-items: center;
         gap: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     ">
         {icon_html}
         <div>
@@ -353,6 +277,7 @@ def render_header():
     """, unsafe_allow_html=True)
 
 def metric_card(label, value, unit="", delta=None):
+    """Metric Cards: White background."""
     delta_html = ""
     if delta is not None:
         color = "#3db87a" if delta >= 0 else "#e05252"
@@ -360,32 +285,37 @@ def metric_card(label, value, unit="", delta=None):
         delta_html = f'<div style="color:{color};font-size:0.7rem;margin-top:2px;">{arrow} {abs(delta):.3f}</div>'
     return f"""
     <div style="
-        background: rgba(26,37,64,0.65);
-        border: 1px solid rgba(201,168,76,0.2);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 6px;
         padding: 1rem 1.25rem;
-        border-top: 2px solid #c9a84c;
+        border-top: 3px solid #c9a84c;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
     ">
-        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:0.68rem;color:#a8b4c8;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">{label}</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:1.35rem;color:#f0f4fb;font-weight:500;">{value}<span style="font-size:0.7rem;color:#a8b4c8;margin-left:4px;">{unit}</span></div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:0.68rem;color:#64748b;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;font-weight:600;">{label}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:1.35rem;color:#1e293b;font-weight:600;">{value}<span style="font-size:0.7rem;color:#64748b;margin-left:4px;">{unit}</span></div>
         {delta_html}
     </div>
     """
 
 def section_title(text, icon=""):
+    """Section Titles: Dark background retained."""
     st.markdown(f"""
     <div style="
         display:flex; align-items:center; gap:0.6rem;
+        background: linear-gradient(90deg, #0b1120 0%, #1a2540 100%);
+        padding: 0.6rem 1.25rem;
+        border-radius: 6px;
+        border-left: 4px solid #c9a84c;
         margin: 1.5rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid rgba(201,168,76,0.18);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     ">
-        <span style="font-size:1rem;">{icon}</span>
+        <span style="font-size:1.1rem; color:#f0f4fb;">{icon}</span>
         <span style="
             font-family:'IBM Plex Sans',sans-serif;
-            font-size:0.72rem;
+            font-size:0.8rem;
             font-weight:600;
-            color:#c9a84c;
+            color:#f0f4fb;
             letter-spacing:0.15em;
             text-transform:uppercase;
         ">{text}</span>
@@ -393,24 +323,26 @@ def section_title(text, icon=""):
     """, unsafe_allow_html=True)
 
 def info_box(text, kind="info"):
+    """Info Boxes: Light backgrounds."""
     colors = {
-        "info":    ("#3a7bd5", "rgba(58,123,213,0.10)"),
-        "success": ("#3db87a", "rgba(61,184,122,0.10)"),
-        "warning": ("#c9a84c", "rgba(201,168,76,0.10)"),
-        "error":   ("#e05252", "rgba(224,82,82,0.10)"),
+        "info":    ("#3a7bd5", "rgba(58,123,213,0.08)"),
+        "success": ("#3db87a", "rgba(61,184,122,0.08)"),
+        "warning": ("#c9a84c", "rgba(201,168,76,0.08)"),
+        "error":   ("#e05252", "rgba(224,82,82,0.08)"),
     }
     border, bg = colors.get(kind, colors["info"])
     icon = {"info": "ℹ", "success": "✓", "warning": "⚠", "error": "✕"}.get(kind, "ℹ")
     st.markdown(f"""
     <div style="
-        background:{bg};border-left:3px solid {border};
-        border-radius:0 4px 4px 0;padding:0.75rem 1rem;
-        font-family:'IBM Plex Sans',sans-serif;font-size:0.82rem;color:#c8d0de;
-        margin:0.5rem 0;
-    "><span style="color:{border};margin-right:0.5rem;">{icon}</span>{text}</div>
+        background:{bg}; border-left:4px solid {border};
+        border-radius:4px; padding:0.75rem 1rem;
+        font-family:'IBM Plex Sans',sans-serif; font-size:0.85rem; color:#334155;
+        margin:0.5rem 0; font-weight:500;
+    "><span style="color:{border};margin-right:0.5rem;font-weight:bold;">{icon}</span>{text}</div>
     """, unsafe_allow_html=True)
 
 def render_sidebar_brand():
+    """Sidebar: Kept dark."""
     logo_path = "SR LOGO.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
@@ -488,15 +420,15 @@ def export_to_excel_with_logo(df, sheet_title):
 
 
 # ==========================================
-# PLOTLY THEME
+# PLOTLY THEME (Light Mode)
 # ==========================================
-PLOT_BG    = "rgba(11,17,32,0.0)"
-PAPER_BG   = "rgba(11,17,32,0.0)"
+PLOT_BG    = "#ffffff"
+PAPER_BG   = "#ffffff"
 GOLD       = "#c9a84c"
-SILVER     = "#a8b4c8"
-WHITE      = "#f0f4fb"
-GRID_COLOR = "rgba(201,168,76,0.08)"
-LINE_COLOR = "rgba(201,168,76,0.35)"
+SILVER     = "#64748b" # Darker gray for readable axes
+WHITE_TXT  = "#1e293b" # Dark text for plots
+GRID_COLOR = "#f1f5f9"
+LINE_COLOR = "#cbd5e1"
 
 AXIS_STYLE = dict(
     mirror=True,
@@ -508,7 +440,7 @@ AXIS_STYLE = dict(
     gridcolor=GRID_COLOR,
     gridwidth=1,
     zeroline=False,
-    title_font=dict(family="IBM Plex Sans", size=13, color=SILVER),
+    title_font=dict(family="IBM Plex Sans", size=13, color=WHITE_TXT),
     tickfont=dict(family="IBM Plex Mono", size=11, color=SILVER),
     tickwidth=1.5,
     ticklen=5,
@@ -523,9 +455,9 @@ JOURNAL_CONFIG = {
 }
 
 PALETTE = [
-    "#c9a84c", "#3a7bd5", "#3db87a", "#e05252",
-    "#9b59b6", "#e67e22", "#1abc9c", "#e74c3c",
-    "#f39c12", "#2980b9", "#27ae60", "#8e44ad",
+    "#0b1120", "#3a7bd5", "#c9a84c", "#e05252",
+    "#3db87a", "#9b59b6", "#e67e22", "#1abc9c",
+    "#e74c3c", "#f39c12", "#2980b9", "#27ae60",
 ]
 
 
@@ -778,7 +710,7 @@ with st.sidebar:
 
     st.markdown("""
     <div style="padding:1rem 0 0.5rem;text-align:center;font-family:'IBM Plex Sans',sans-serif;
-                font-size:0.65rem;color:rgba(168,180,200,0.45);letter-spacing:0.1em;">
+                font-size:0.65rem;color:rgba(168,180,200,0.6);letter-spacing:0.1em;">
         For Research & Academic Use Only<br>Version 3.0 Pro
     </div>
     """, unsafe_allow_html=True)
@@ -817,12 +749,12 @@ def styled_figure(width=820, height=520):
         width=width, height=height,
         margin=dict(l=72, r=32, t=32, b=64),
         plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-        font=dict(family="IBM Plex Sans", color=WHITE),
+        font=dict(family="IBM Plex Sans", color=WHITE_TXT),
         legend=dict(
-            bgcolor="rgba(11,17,32,0.75)",
+            bgcolor="rgba(255,255,255,0.9)",
             bordercolor=LINE_COLOR,
             borderwidth=1,
-            font=dict(family="IBM Plex Mono", size=11, color=SILVER),
+            font=dict(family="IBM Plex Mono", size=11, color=WHITE_TXT),
         ),
         xaxis=AXIS_STYLE,
         yaxis=AXIS_STYLE,
@@ -844,9 +776,9 @@ def plot_trend(data_df, param_selected, show_trendline=True, custom_x="", custom
                      color=GOLD, thickness=1.5, width=6),
         mode='lines+markers',
         name=param_selected,
-        line=dict(color=GOLD, width=2.5),
+        line=dict(color="#0b1120", width=2.5),
         marker=dict(size=10, color=GOLD,
-                    line=dict(color=WHITE, width=1.5),
+                    line=dict(color="#0b1120", width=1.5),
                     symbol='circle'),
     ))
 
@@ -916,8 +848,8 @@ if not df_master.empty:
                 st.markdown(f"""
                 <div style="
                     display:inline-block;padding:0.5rem 1.25rem;
-                    background:rgba(26,37,64,0.7);border:1px solid rgba(201,168,76,0.2);
-                    border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{color};
+                    background:#f8fafc;border:1px solid #e2e8f0;
+                    border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:{color};font-weight:500;
                 ">
                     ANOVA · p-value = {p_val:.4e} &nbsp;·&nbsp; {sig} (α = 0.05)
                 </div>
@@ -948,8 +880,8 @@ if not df_master.empty:
                 st.markdown(f"""
                 <div style="
                     display:inline-block;padding:0.5rem 1.25rem;
-                    background:rgba(26,37,64,0.7);border:1px solid rgba(201,168,76,0.2);
-                    border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{color};
+                    background:#f8fafc;border:1px solid #e2e8f0;
+                    border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;color:{color};font-weight:500;
                 ">
                     ANOVA · p-value = {p_val:.4e} &nbsp;·&nbsp; {sig} (α = 0.05)
                 </div>
@@ -1119,20 +1051,25 @@ if not df_master.empty:
             mask = freq > 0
 
             fig_psd = styled_figure(820, 460)
+            
+            # Convert hex to rgba manually for fillcolor
+            hex_col = PALETTE[i % len(PALETTE)].lstrip('#')
+            r, g, b = tuple(int(hex_col[j:j+2], 16) for j in (0, 2, 4))
+            
             fig_psd.add_trace(go.Scatter(
                 x=freq[mask], y=psd[mask],
                 mode='lines',
                 name=os.path.splitext(f)[0],
                 line=dict(color=PALETTE[i % len(PALETTE)], width=1.5),
                 fill='tozeroy',
-                fillcolor=f"rgba({int(PALETTE[i%len(PALETTE)][1:3],16)},{int(PALETTE[i%len(PALETTE)][3:5],16)},{int(PALETTE[i%len(PALETTE)][5:7],16)},0.08)",
+                fillcolor=f"rgba({r},{g},{b},0.08)",
             ))
             fig_psd.update_layout(
                 xaxis=dict(**AXIS_STYLE, title_text=c_x_psd or "Spatial Frequency (cycles/mm)", type="log"),
                 yaxis=dict(**AXIS_STYLE, title_text=c_y_psd or "Power Density (µm²·mm)", type="log"),
                 title=dict(
                     text=os.path.splitext(f)[0],
-                    font=dict(family="IBM Plex Mono", size=12, color=SILVER),
+                    font=dict(family="IBM Plex Mono", size=12, color=WHITE_TXT),
                     x=0.5,
                 ),
             )
@@ -1143,7 +1080,7 @@ if not df_master.empty:
     with tabs[6]:
         section_title("Comprehensive Data Export", "💾")
         st.markdown("""
-        <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.84rem;color:#a8b4c8;margin-bottom:1.25rem;">
+        <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.84rem;color:#64748b;margin-bottom:1.25rem;">
         All exports are production-ready Excel workbooks with auto-fitted columns and embedded lab logo.
         </p>
         """, unsafe_allow_html=True)
@@ -1343,20 +1280,22 @@ else:
     <div style="
         margin-top:3rem;
         padding:3rem 2rem;
-        background:rgba(26,37,64,0.4);
-        border:1px solid rgba(201,168,76,0.18);
+        background:#ffffff;
+        border:1px solid #e2e8f0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         border-radius:8px;
         text-align:center;
     ">
         <div style="font-size:3rem;margin-bottom:1rem;">🔬</div>
         <div style="
             font-family:'Playfair Display',Georgia,serif;
-            font-size:1.5rem;color:#f0f4fb;
+            font-size:1.5rem;color:#1e293b;
             margin-bottom:0.5rem;
+            font-weight:700;
         ">Ready for Analysis</div>
         <div style="
             font-family:'IBM Plex Sans',sans-serif;
-            font-size:0.85rem;color:#a8b4c8;
+            font-size:0.85rem;color:#64748b;
             max-width:420px;margin:0 auto;line-height:1.7;
         ">
             Upload your surface replicate files via the <b style="color:#c9a84c;">Data Input</b> panel
