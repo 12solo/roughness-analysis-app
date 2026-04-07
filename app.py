@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# GLOBAL CUSTOM CSS — Light Theme with Dark Headers
+# GLOBAL CUSTOM CSS — Full Light Theme
 # ==========================================
 st.markdown("""
 <style>
@@ -32,7 +32,7 @@ st.markdown("""
 
 /* ── CSS Variables ────────────────────────────── */
 :root {
-    /* Dark Brand Colors (Kept for Headings/Sidebar) */
+    /* Brand Colors */
     --navy:       #0b1120;
     --navy-mid:   #111827;
     --navy-light: #1a2540;
@@ -40,7 +40,7 @@ st.markdown("""
     --gold-light: #e2c97e;
     --gold-dim:   #9c7a32;
     
-    /* Light Mode Colors (For everything else) */
+    /* Light Mode Colors */
     --bg-white:   #ffffff;
     --bg-offwhite:#f8fafc;
     --text-dark:  #1e293b;
@@ -56,7 +56,7 @@ st.markdown("""
     --font-body:  'IBM Plex Sans', 'Segoe UI', sans-serif;
 }
 
-/* ── Base & Body (Light Mode) ─────────────────── */
+/* ── Base & Body ──────────────────────────────── */
 html, body, [class*="css"] {
     font-family: var(--font-body);
     color: var(--text-dark);
@@ -64,42 +64,57 @@ html, body, [class*="css"] {
 .stApp {
     background: var(--bg-white);
 }
-.stApp::before { display: none; } /* Remove dark grid */
+.stApp::before { display: none; }
 
-/* ── Sidebar (Kept Dark) ──────────────────────── */
+/* ── Sidebar (Pure White & User Friendly) ─────── */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #080e1c 0%, #0d1628 100%);
-    border-right: 1px solid var(--navy-light);
+    background: #ffffff !important; /* Pure White Background */
+    border-right: 1px solid var(--border-light);
 }
 [data-testid="stSidebar"] .stMarkdown,
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] p,
 [data-testid="stSidebar"] span {
-    color: #c8d0de !important;
+    color: var(--text-dark) !important;
     font-family: var(--font-body);
 }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    color: var(--gold) !important;
-    font-weight: 600;
+    color: var(--gold-dim) !important;
+    font-weight: 700;
     font-size: 0.75rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
 }
-[data-testid="stSidebar"] hr { border-color: rgba(201,168,76,0.2); }
+[data-testid="stSidebar"] hr { border-color: var(--border-light); }
 
-/* Sidebar Inputs (Dark) */
+/* Sidebar Inputs */
 [data-testid="stSidebar"] input[type="text"],
 [data-testid="stSidebar"] input[type="number"],
 [data-testid="stSidebar"] textarea,
 [data-testid="stSidebar"] select {
-    background: rgba(11,17,32,0.8) !important;
-    border: 1px solid rgba(201,168,76,0.22) !important;
-    color: #ffffff !important;
+    background: var(--bg-white) !important;
+    border: 1px solid var(--border-light) !important;
+    border-radius: 4px !important;
+    color: var(--text-dark) !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.82rem !important;
 }
 
-/* ── Main Area Inputs (Light Mode) ────────────── */
+/* File Uploader Dropzone (Make it look clickable and clean) */
+[data-testid="stFileUploadDropzone"] {
+    background-color: var(--bg-white) !important;
+    border: 2px dashed #cbd5e1 !important;
+    border-radius: 6px !important;
+    padding: 1rem !important;
+}
+[data-testid="stFileUploadDropzone"]:hover {
+    border-color: var(--gold) !important;
+    background-color: var(--bg-offwhite) !important;
+}
+
+/* ── Main Area Inputs ─────────────────────────── */
 .stSelectbox > div > div,
 .stTextInput > div > div > input,
 .stNumberInput > div > div > input {
@@ -140,7 +155,7 @@ html, body, [class*="css"] {
     color: white !important;
 }
 
-/* Download buttons (Light Mode) */
+/* Download buttons */
 [data-testid="stDownloadButton"] > button {
     background: var(--bg-offwhite) !important;
     color: var(--navy) !important;
@@ -154,7 +169,7 @@ html, body, [class*="css"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
 }
 
-/* ── Tabs (Light Mode) ────────────────────────── */
+/* ── Tabs ─────────────────────────────────────── */
 [data-testid="stTabs"] [role="tablist"] {
     background: var(--bg-offwhite);
     border-bottom: 1px solid var(--border-light);
@@ -180,7 +195,7 @@ html, body, [class*="css"] {
     background: var(--bg-white) !important;
 }
 
-/* ── DataFrames (Light Mode) ──────────────────── */
+/* ── DataFrames ───────────────────────────────── */
 [data-testid="stDataFrame"] {
     border: 1px solid var(--border-light) !important;
     border-radius: 6px !important;
@@ -195,7 +210,7 @@ html, body, [class*="css"] {
     color: var(--text-dark) !important;
 }
 
-/* ── Expanders (Light Mode) ───────────────────── */
+/* ── Expanders ────────────────────────────────── */
 [data-testid="stExpander"] {
     border: 1px solid var(--border-light) !important;
     border-radius: 4px !important;
@@ -206,7 +221,7 @@ html, body, [class*="css"] {
     font-weight: 600 !important;
 }
 
-/* ── Text Area & Selectors (Light Mode) ───────── */
+/* ── Text Area & Selectors ────────────────────── */
 .stTextArea textarea {
     background: var(--bg-white) !important;
     border: 1px solid var(--border-light) !important;
@@ -233,8 +248,7 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 def render_header():
-    """Main Header: Dark background retained."""
-    logo_path = "Solomon_SR_Logo.png"
+    logo_path = "SR LOGO.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
         icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5); flex-shrink: 0; background: white;">'
@@ -277,7 +291,6 @@ def render_header():
     """, unsafe_allow_html=True)
 
 def metric_card(label, value, unit="", delta=None):
-    """Metric Cards: White background."""
     delta_html = ""
     if delta is not None:
         color = "#3db87a" if delta >= 0 else "#e05252"
@@ -299,7 +312,6 @@ def metric_card(label, value, unit="", delta=None):
     """
 
 def section_title(text, icon=""):
-    """Section Titles: Dark background retained."""
     st.markdown(f"""
     <div style="
         display:flex; align-items:center; gap:0.6rem;
@@ -323,7 +335,6 @@ def section_title(text, icon=""):
     """, unsafe_allow_html=True)
 
 def info_box(text, kind="info"):
-    """Info Boxes: Light backgrounds."""
     colors = {
         "info":    ("#3a7bd5", "rgba(58,123,213,0.08)"),
         "success": ("#3db87a", "rgba(61,184,122,0.08)"),
@@ -342,13 +353,12 @@ def info_box(text, kind="info"):
     """, unsafe_allow_html=True)
 
 def render_sidebar_brand():
-    """Sidebar: Kept dark."""
     logo_path = "SR LOGO.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
-        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 52px; height: 52px; margin: 0 auto 0.75rem auto; border-radius: 10px; display: block; box-shadow: 0 4px 16px rgba(201,168,76,0.3); object-fit: contain; background: white;">'
+        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 52px; height: 52px; margin: 0 auto 0.75rem auto; border-radius: 10px; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.1); object-fit: contain; background: white;">'
     else:
-        icon_html = '<div style="width:52px; height:52px; margin:0 auto 0.75rem auto; background:linear-gradient(135deg,#9c7a32,#c9a84c); border-radius:10px; display:flex;align-items:center;justify-content:center; font-size:1.5rem; box-shadow:0 4px 16px rgba(201,168,76,0.3);">🔬</div>'
+        icon_html = '<div style="width:52px; height:52px; margin:0 auto 0.75rem auto; background:linear-gradient(135deg,#9c7a32,#c9a84c); border-radius:10px; display:flex;align-items:center;justify-content:center; font-size:1.5rem; box-shadow:0 4px 12px rgba(0,0,0,0.1);">🔬</div>'
 
     st.markdown(f"""
     <div style="padding: 1.25rem 0 0.5rem 0; text-align:center;">
@@ -365,15 +375,15 @@ def render_sidebar_brand():
             font-family:'Playfair Display',Georgia,serif;
             font-size:1.1rem;
             font-weight:700;
-            color:#f0f4fb;
+            color:#1e293b;
         ">SRoughnessLab <span style="color:#c9a84c;">Pro</span></div>
         <div style="
             margin-top:0.75rem;
             padding-top:0.75rem;
-            border-top:1px solid rgba(201,168,76,0.2);
+            border-top:1px solid #e2e8f0;
             font-family:'IBM Plex Sans',sans-serif;
             font-size:0.68rem;
-            color:#7a8aaa;
+            color:#64748b;
         ">Surface Roughness Analysis Suite<br>
         <a href='mailto:your.solomon.duf@gmail.com'
            style='color:#9c7a32;text-decoration:none;'>
@@ -420,13 +430,13 @@ def export_to_excel_with_logo(df, sheet_title):
 
 
 # ==========================================
-# PLOTLY THEME (Light Mode)
+# PLOTLY THEME
 # ==========================================
 PLOT_BG    = "#ffffff"
 PAPER_BG   = "#ffffff"
 GOLD       = "#c9a84c"
-SILVER     = "#64748b" # Darker gray for readable axes
-WHITE_TXT  = "#1e293b" # Dark text for plots
+SILVER     = "#64748b"
+WHITE_TXT  = "#1e293b"
 GRID_COLOR = "#f1f5f9"
 LINE_COLOR = "#cbd5e1"
 
@@ -561,7 +571,6 @@ if not st.session_state['master_df'].empty and 'Sample' not in st.session_state[
 # ==========================================
 with st.sidebar:
     render_sidebar_brand()
-    st.markdown("<hr style='border-color:rgba(201,168,76,0.2);margin:1rem 0'>", unsafe_allow_html=True)
 
     # ── 1. Data Input ───────────────────────────────
     st.markdown("### 1 · Data Input")
@@ -599,7 +608,7 @@ with st.sidebar:
 
     # ── Manage Data ─────────────────────────────────
     if not st.session_state['master_df'].empty:
-        st.markdown("<hr style='border-color:rgba(201,168,76,0.15);margin:1rem 0'>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("### 2 · Manage Data")
         with st.expander("🗑 Delete / Replace Data"):
             unique_samples = sorted(st.session_state['master_df']['Sample'].unique(), key=natural_sort_key)
@@ -624,7 +633,7 @@ with st.sidebar:
 
     # ── Legend Customization ─────────────────────────
     if not st.session_state['master_df'].empty:
-        st.markdown("<hr style='border-color:rgba(201,168,76,0.15);margin:1rem 0'>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("### 3 · Legend Labels")
         unique_samples = sorted(st.session_state['master_df']['Sample'].unique(), key=natural_sort_key)
         for s in unique_samples:
@@ -635,7 +644,7 @@ with st.sidebar:
     # ── Global Trend Optimizer ───────────────────────
     if not st.session_state['master_df'].empty:
         unique_samples = sorted(st.session_state['master_df']['Sample'].unique(), key=natural_sort_key)
-        st.markdown("<hr style='border-color:rgba(201,168,76,0.15);margin:1rem 0'>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("### 4 · Trend Optimizer")
         with st.expander("✂ Inter-Sample Optimizer"):
             st.caption("Remove outlier tests so the overall mean Ra forms a clean monotonic trend.")
@@ -690,7 +699,7 @@ with st.sidebar:
 
     # ── Plot Customization ───────────────────────────
     if not st.session_state['master_df'].empty:
-        st.markdown("<hr style='border-color:rgba(201,168,76,0.15);margin:1rem 0'>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("### 5 · Axis Overrides")
         with st.expander("🖍 Custom Axis Labels"):
             c_x_trend = st.text_input("Trends — X Axis", "")
@@ -703,14 +712,14 @@ with st.sidebar:
         c_x_trend = c_y_trend = c_x_prof = c_y_prof = c_x_psd = c_y_psd = ""
 
     # ── Reset ────────────────────────────────────────
-    st.markdown("<hr style='border-color:rgba(201,168,76,0.15);margin:1rem 0'>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
     if st.button("⚠ Reset Entire Study", type="primary", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
     st.markdown("""
     <div style="padding:1rem 0 0.5rem;text-align:center;font-family:'IBM Plex Sans',sans-serif;
-                font-size:0.65rem;color:rgba(168,180,200,0.6);letter-spacing:0.1em;">
+                font-size:0.65rem;color:rgba(100,116,139,0.6);letter-spacing:0.1em;">
         For Research & Academic Use Only<br>Version 3.0 Pro
     </div>
     """, unsafe_allow_html=True)
