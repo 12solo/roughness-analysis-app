@@ -411,7 +411,7 @@ def info_box(text, kind="info"):
     """, unsafe_allow_html=True)
 
 def render_sidebar_brand():
-    logo_path = "Solomon_SR_Logo.png"
+    logo_path = "SR LOGO.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
         icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 52px; height: 52px; margin: 0 auto 0.75rem auto; border-radius: 10px; display: block; box-shadow: 0 4px 16px rgba(201,168,76,0.3); object-fit: contain; background: white;">'
