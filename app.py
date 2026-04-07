@@ -10,6 +10,7 @@ from scipy.ndimage import gaussian_filter1d
 import re
 import os
 import io
+import base64
 
 # ==========================================
 # PAGE CONFIG — must be first Streamlit call
@@ -307,8 +308,20 @@ html, body, [class*="css"] {
 # ==========================================
 # HELPER COMPONENTS
 # ==========================================
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 def render_header():
-    st.markdown("""
+    logo_path = "Solomon_SR_Logo.png"
+    if os.path.exists(logo_path):
+        img_b64 = get_base64_of_bin_file(logo_path)
+        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(201,168,76,0.3); flex-shrink: 0; background: white;">'
+    else:
+        icon_html = '<div style="width: 54px; height: 54px; background: linear-gradient(135deg, #9c7a32, #c9a84c); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 4px 20px rgba(201,168,76,0.3); flex-shrink: 0;">🔬</div>'
+
+    st.markdown(f"""
     <div style="
         padding: 2rem 0 1.5rem 0;
         border-bottom: 1px solid rgba(201,168,76,0.25);
@@ -317,15 +330,7 @@ def render_header():
         align-items: center;
         gap: 1.5rem;
     ">
-        <div style="
-            width: 54px; height: 54px;
-            background: linear-gradient(135deg, #9c7a32, #c9a84c);
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.6rem;
-            box-shadow: 0 4px 20px rgba(201,168,76,0.3);
-            flex-shrink: 0;
-        ">🔬</div>
+        {icon_html}
         <div>
             <div style="
                 font-family: 'Playfair Display', Georgia, serif;
@@ -406,16 +411,16 @@ def info_box(text, kind="info"):
     """, unsafe_allow_html=True)
 
 def render_sidebar_brand():
-    st.markdown("""
+    logo_path = "Solomon_SR_Logo.png"
+    if os.path.exists(logo_path):
+        img_b64 = get_base64_of_bin_file(logo_path)
+        icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 52px; height: 52px; margin: 0 auto 0.75rem auto; border-radius: 10px; display: block; box-shadow: 0 4px 16px rgba(201,168,76,0.3); object-fit: contain; background: white;">'
+    else:
+        icon_html = '<div style="width:52px; height:52px; margin:0 auto 0.75rem auto; background:linear-gradient(135deg,#9c7a32,#c9a84c); border-radius:10px; display:flex;align-items:center;justify-content:center; font-size:1.5rem; box-shadow:0 4px 16px rgba(201,168,76,0.3);">🔬</div>'
+
+    st.markdown(f"""
     <div style="padding: 1.25rem 0 0.5rem 0; text-align:center;">
-        <div style="
-            width:52px; height:52px; margin:0 auto 0.75rem auto;
-            background:linear-gradient(135deg,#9c7a32,#c9a84c);
-            border-radius:10px;
-            display:flex;align-items:center;justify-content:center;
-            font-size:1.5rem;
-            box-shadow:0 4px 16px rgba(201,168,76,0.3);
-        ">🔬</div>
+        {icon_html}
         <div style="
             font-family:'IBM Plex Sans',sans-serif;
             font-size:0.65rem;
