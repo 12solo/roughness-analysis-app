@@ -943,20 +943,6 @@ if not df_master.empty:
                         rep_tv.append(v + y_shift)
                         rep_tt.append(f"<b>{v}</b>")
 
-            rep_tv.append(y_shift)
-                    rep_tt.append("<b>0</b>")
-                    for v in [-5, 5]:
-                        rep_tv.append(v + y_shift)
-                        rep_tt.append(f"<b>{v}</b>")
-
-            # ---> I deleted the buggy xl and yl lines here! <---
-            
-            fig_rep.update_layout(
-                xaxis=dict(**AXIS_STYLE, title_text=c_x_prof or "Wavelength (mm)"),
-                yaxis=dict(**AXIS_STYLE, title_text=c_y_prof or "Roughness (µm)",
-                           tickmode='array', tickvals=rep_tv, ticktext=rep_tt),
-            )
-            st.plotly_chart(fig_rep, use_container_width=False, config=JOURNAL_CONFIG)
             fig_rep.update_layout(
                 xaxis=dict(**AXIS_STYLE, title_text=c_x_prof or "Wavelength (mm)"),
                 yaxis=dict(**AXIS_STYLE, title_text=c_y_prof or "Roughness (µm)",
