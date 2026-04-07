@@ -17,7 +17,7 @@ import base64
 # ==========================================
 st.set_page_config(
     page_title="SRoughnessLab Pro | Solomon Scientific",
-    page_icon="🔬",
+    page_icon="SR LOGO.png",  # Changed from "🔬" to your local image file
     layout="wide",
     initial_sidebar_state="expanded"
 )
