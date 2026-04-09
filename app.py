@@ -256,7 +256,7 @@ def get_base64_of_bin_file(bin_file):
     return base64.b64encode(data).decode()
 
 def render_header():
-    logo_path = "Solomon_SR_Logo.png"
+    logo_path = "SR LOGO.png"
     if os.path.exists(logo_path):
         img_b64 = get_base64_of_bin_file(logo_path)
         icon_html = f'<img src="data:image/png;base64,{img_b64}" style="width: 54px; height: 54px; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5); flex-shrink: 0; background: white;">'
